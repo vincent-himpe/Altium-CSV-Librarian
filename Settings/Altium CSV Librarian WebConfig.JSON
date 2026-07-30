@@ -1,0 +1,40 @@
+{
+  "engines": [
+    {
+      "website": "Mouser",
+      "query": "https://www.mouser.com/en/c/?q=",
+      "enabled": true,
+      "quicklook": false
+    },
+    {
+      "website": "DigiKey",
+      "query": "https://www.digikey.com/en/products/result?keywords=",
+      "enabled": true,
+      "quicklook": false
+    },
+    {
+      "website": "TME",
+      "query": "https://www.tme.com/us/en-us/katalog/?queryPhrase=",
+      "enabled": true,
+      "quicklook": false
+    },
+    {
+      "website": "LCSC",
+      "query": "https://www.lcsc.com/category/1142.html?scene=FULL_MATCH&globalKeyword=",
+      "enabled": true,
+      "quicklook": false
+    },
+    {
+      "website": "OctoPart",
+      "query": "https://octopart.com/search?full_query=",
+      "enabled": true,
+      "quicklook": true
+    },
+    {
+      "website": "Avnet",
+      "query": "https://www.avnet.com/americas/products/c/search?search=",
+      "enabled": true,
+      "quicklook": false
+    }
+  ]
+}
