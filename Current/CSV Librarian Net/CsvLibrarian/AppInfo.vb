@@ -10,7 +10,7 @@ Namespace Global.CsvLibrarian
         ''' Application version. Appended to the main window caption at startup,
         ''' e.g. "Altium CSV Librarian V 0.1".
         ''' </summary>
-        Public Const Version As String = "-Beta- 0.4"
+        Public Const Version As String = "-Beta- 0.7"
 
         ''' <summary>
         ''' Comma-separated header row written to a brand-new library CSV

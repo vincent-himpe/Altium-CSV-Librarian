@@ -13,6 +13,9 @@
     <Compile Update="Forms\HelpForm.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Update="Forms\ImportRecordsForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Update="Forms\MainForm.vb">
       <SubType>Form</SubType>
     </Compile>
@@ -23,6 +26,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Update="Forms\SearchEnginesForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\SupplierApiForm.vb">
       <SubType>Form</SubType>
     </Compile>
   </ItemGroup>

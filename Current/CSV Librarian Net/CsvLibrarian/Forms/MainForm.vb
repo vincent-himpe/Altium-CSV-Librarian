@@ -3,6 +3,9 @@ Imports System.Drawing
 Imports System.IO
 Imports System.IO.Compression
 Imports System.Linq
+Imports System.Text
+Imports System.Text.Encodings.Web
+Imports System.Text.Json
 Imports System.Windows.Forms
 Imports CsvLibrarian.Models
 Imports CsvLibrarian.Services
@@ -34,6 +37,9 @@ Namespace Forms
         Private _startFolder As String = Nothing
         Private _baseCaption As String = "Altium CSV Librarian"  ' set from the title at startup
         Private ReadOnly _toolTip As New ToolTip()
+
+        ' The non-modal Import Records window (single instance).
+        Private _importForm As ImportRecordsForm = Nothing
 
         ' Right-click "search this part number" menu (built on demand from the web config).
         Private WithEvents _webMenu As New ContextMenuStrip()
@@ -1090,6 +1096,12 @@ Namespace Forms
                 If(String.IsNullOrEmpty(AppInfo.OurClipboard), "-Empty-", AppInfo.OurClipboard) & " "
         End Sub
 
+        ''' <summary>Public hook: refresh the find/clipboard status labels after another
+        ''' window changes AppInfo.OurClipboard (e.g. the Import Records viewer).</summary>
+        Public Sub RefreshClipboardStatus()
+            UpdateFindReplaceStatus()
+        End Sub
+
         Private Sub SetFindString(value As String)
             AppInfo.FindString = value
             UpdateFindReplaceStatus()
@@ -1412,6 +1424,148 @@ Namespace Forms
             Return zipName
         End Function
 
+        ' ── Export a single record ──────────────────────────────────────────────────
+
+        Private Shared ReadOnly ExportJsonOpts As New JsonSerializerOptions With {
+            .WriteIndented = True,
+            .Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        }
+
+        ''' <summary>
+        ''' Export the current grid row as a JSON file of "header": "value" pairs (the
+        ''' GUID/Index column included), written to the working folder with a ".EXPORT"
+        ''' extension. The file name comes from the "Manufacturer Part Number 1" cell,
+        ''' upper-cased and sanitized so only [A-Za-z0-9] survive (everything else
+        ''' becomes a hyphen). If that field is blank, the user is prompted; the entered
+        ''' text is upper-cased and sanitized the same way.
+        ''' </summary>
+        Private Sub ExportRecord()
+            If ActiveTable Is Nothing OrElse String.IsNullOrEmpty(_folder) Then Return
+            grid.EndEdit()
+
+            Dim rowIndex = If(grid.CurrentCell IsNot Nothing, grid.CurrentCell.RowIndex, -1)
+            If rowIndex < 0 OrElse rowIndex >= grid.RowCount Then
+                SetStatus("No row selected to export", Palette.Warning)
+                Return
+            End If
+
+            ' Header -> value for every column of this row (grid order; GUID included).
+            Dim record As New Dictionary(Of String, String)()
+            For i As Integer = 0 To grid.Columns.Count - 1
+                Dim cellVal = grid.Rows(rowIndex).Cells(i).Value
+                record(grid.Columns(i).HeaderText) = If(cellVal Is Nothing, "", cellVal.ToString())
+            Next
+
+            ' Base file name: the part number, or a prompt (upper-cased) if it is blank.
+            Dim mpn As String = ""
+            Dim mpnCol = FindColumnIndex(PartNumberColumn)
+            If mpnCol >= 0 Then
+                Dim v = grid.Rows(rowIndex).Cells(mpnCol).Value
+                mpn = If(v Is Nothing, "", v.ToString())
+            End If
+
+            Dim baseName As String
+            If String.IsNullOrWhiteSpace(mpn) Then
+                Dim entered = VbInteraction.InputBox(
+                    "Manufacturer Part Number 1 is empty. Enter a name for the export file:",
+                    "Export Record", "").Trim()
+                If entered.Length = 0 Then
+                    SetStatus("Export cancelled", Palette.TextMuted)
+                    Return
+                End If
+                baseName = SanitizeFileName(entered.ToUpperInvariant())
+            Else
+                baseName = SanitizeFileName(mpn.ToUpperInvariant())
+            End If
+            If baseName.Length = 0 Then
+                SetStatus("No usable characters for a file name", Palette.Warning)
+                Return
+            End If
+
+            Dim exportPath = Path.Combine(_folder, baseName & ".EXPORT")
+            Try
+                File.WriteAllText(exportPath, JsonSerializer.Serialize(record, ExportJsonOpts),
+                                  New UTF8Encoding(False))
+            Catch ex As Exception
+                MessageBox.Show(Me, "Could not write the export file:" & vbCrLf & ex.Message,
+                                "Export Record", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End Try
+            SetStatus($"Exported {baseName}.EXPORT", Palette.Success)
+
+            ' If the Import Records window is open, show the new file immediately.
+            If _importForm IsNot Nothing AndAlso Not _importForm.IsDisposed Then _importForm.RefreshFiles()
+        End Sub
+
+        ''' <summary>Index of the grid column whose bound name matches, or -1.</summary>
+        Private Function FindColumnIndex(dataName As String) As Integer
+            For i As Integer = 0 To grid.Columns.Count - 1
+                If String.Equals(ColumnDataName(grid.Columns(i)), dataName, StringComparison.OrdinalIgnoreCase) Then
+                    Return i
+                End If
+            Next
+            Return -1
+        End Function
+
+        ''' <summary>Keep only ASCII letters/digits; replace every other character with
+        ''' a hyphen (so the result is safe as a file name).</summary>
+        Private Shared Function SanitizeFileName(value As String) As String
+            If value Is Nothing Then Return ""
+            Dim sb As New StringBuilder(value.Length)
+            For Each ch As Char In value
+                If (ch >= "0"c AndAlso ch <= "9"c) OrElse
+                   (ch >= "A"c AndAlso ch <= "Z"c) OrElse
+                   (ch >= "a"c AndAlso ch <= "z"c) Then
+                    sb.Append(ch)
+                Else
+                    sb.Append("-"c)
+                End If
+            Next
+            Return sb.ToString()
+        End Function
+
+        ''' <summary>
+        ''' Append a new row to the active grid, copying values from
+        ''' <paramref name="record"/> for every column whose name matches
+        ''' (case-insensitive) — the GUID/Index column included, and NO new GUID is
+        ''' generated. Returns the list of matched column names, or Nothing if there is
+        ''' no active table. Used by the Import Records window.
+        ''' </summary>
+        Public Function ImportRecordIntoGrid(record As IDictionary(Of String, String)) As List(Of String)
+            Dim table = ActiveTable
+            If table Is Nothing Then Return Nothing
+            grid.EndEdit()
+
+            Dim matched As New List(Of String)()
+            Dim row = table.NewRow()
+            For i As Integer = 0 To table.Columns.Count - 1
+                row(i) = ""
+            Next
+            For Each kv In record
+                If table.Columns.Contains(kv.Key) Then
+                    row(table.Columns(kv.Key)) = If(kv.Value, "")
+                    matched.Add(kv.Key)
+                End If
+            Next
+            table.Rows.Add(row)
+            MarkActiveDirty()
+
+            ' Select and scroll to the new row (best-effort).
+            Try
+                Dim viewIndex = bindingSrc.Count - 1
+                If viewIndex >= 0 Then
+                    grid.ClearSelection()
+                    Dim colIndex = If(grid.Columns.Count > 1, 1, 0)
+                    grid.CurrentCell = grid.Rows(viewIndex).Cells(colIndex)
+                    grid.FirstDisplayedScrollingRowIndex = Math.Max(0, viewIndex)
+                End If
+            Catch
+                ' Selection is best-effort.
+            End Try
+
+            Return matched
+        End Function
+
         ' ── Menu event handlers ──────────────────────────────────────────────────
 
         Private Sub mnuOpen_Click(sender As Object, e As EventArgs) Handles mnuOpen.Click
@@ -1528,6 +1682,17 @@ Namespace Forms
         ''' <summary>Open the WebCrawler search-engine configuration window.</summary>
         Private Sub OpenWebCrawler()
             Using dlg As New SearchEnginesForm()
+                dlg.ShowDialog(Me)
+            End Using
+        End Sub
+
+        Private Sub mnuApiIntegration_Click(sender As Object, e As EventArgs) Handles mnuApiIntegration.Click
+            OpenApiIntegration()
+        End Sub
+
+        ''' <summary>Open the Supplier API Integration window (edits the shared settings).</summary>
+        Private Sub OpenApiIntegration()
+            Using dlg As New SupplierApiForm(_settings)
                 dlg.ShowDialog(Me)
             End Using
         End Sub
@@ -1816,6 +1981,31 @@ Namespace Forms
 
         Private Sub mnu_tools_ConvertID_Click(sender As Object, e As EventArgs) Handles mnu_tools_ConvertID.Click
             ConvertIdToIndex()
+        End Sub
+
+        Private Sub ExportRowToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles ExportRowToolStripMenuItem.Click
+            ExportRecord()
+        End Sub
+
+        Private Sub ImportRecordsToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles ImportRecordsToolStripMenuItem.Click
+            OpenImportRecords()
+        End Sub
+
+        ''' <summary>Open (or re-focus) the non-modal Import Records window for the
+        ''' current working folder. A single instance is kept.</summary>
+        Private Sub OpenImportRecords()
+            If String.IsNullOrEmpty(_folder) Then
+                MessageBox.Show(Me, "Open a working folder first.", "Import Records",
+                                MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+            If _importForm IsNot Nothing AndAlso Not _importForm.IsDisposed Then
+                _importForm.Activate()
+                Return
+            End If
+            _importForm = New ImportRecordsForm(_folder)
+            AddHandler _importForm.FormClosed, Sub() _importForm = Nothing
+            _importForm.Show(Me)   ' non-modal; owned so it stays above the main window
         End Sub
 
         Private Sub QuickWebLookupToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles QuickWebLookupToolStripMenuItem.Click

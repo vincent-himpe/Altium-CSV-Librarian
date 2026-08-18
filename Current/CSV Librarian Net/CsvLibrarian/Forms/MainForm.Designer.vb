@@ -65,9 +65,12 @@ Namespace Forms
             ToolsToolStripMenuItem = New ToolStripMenuItem()
             mnu_tools_ConvertID = New ToolStripMenuItem()
             QuickWebLookupToolStripMenuItem = New ToolStripMenuItem()
+            ExportRowToolStripMenuItem = New ToolStripMenuItem()
+            ImportRecordsToolStripMenuItem = New ToolStripMenuItem()
             mnuSettings = New ToolStripMenuItem()
             mnuRules = New ToolStripMenuItem()
             mnuWebCrawler = New ToolStripMenuItem()
+            mnuApiIntegration = New ToolStripMenuItem()
             mnuAdvancedClipboard = New ToolStripMenuItem()
             mnuOptions = New ToolStripMenuItem()
             sepSettings1 = New ToolStripSeparator()
@@ -424,7 +427,7 @@ Namespace Forms
             ' 
             ' ToolsToolStripMenuItem
             ' 
-            ToolsToolStripMenuItem.DropDownItems.AddRange(New ToolStripItem() {mnu_tools_ConvertID, QuickWebLookupToolStripMenuItem})
+            ToolsToolStripMenuItem.DropDownItems.AddRange(New ToolStripItem() {mnu_tools_ConvertID, QuickWebLookupToolStripMenuItem, ExportRowToolStripMenuItem, ImportRecordsToolStripMenuItem})
             ToolsToolStripMenuItem.Name = "ToolsToolStripMenuItem"
             ToolsToolStripMenuItem.Size = New Size(47, 20)
             ToolsToolStripMenuItem.Text = "Tools"
@@ -441,10 +444,23 @@ Namespace Forms
             QuickWebLookupToolStripMenuItem.ShortcutKeys = Keys.Control Or Keys.W
             QuickWebLookupToolStripMenuItem.Size = New Size(220, 22)
             QuickWebLookupToolStripMenuItem.Text = "Quick Web Lookup"
+            '
+            ' ExportRowToolStripMenuItem
+            '
+            ExportRowToolStripMenuItem.Name = "ExportRowToolStripMenuItem"
+            ExportRowToolStripMenuItem.ShortcutKeys = Keys.Control Or Keys.E
+            ExportRowToolStripMenuItem.Size = New Size(220, 22)
+            ExportRowToolStripMenuItem.Text = "Export Row"
+            '
+            ' ImportRecordsToolStripMenuItem
+            '
+            ImportRecordsToolStripMenuItem.Name = "ImportRecordsToolStripMenuItem"
+            ImportRecordsToolStripMenuItem.Size = New Size(220, 22)
+            ImportRecordsToolStripMenuItem.Text = "Import Records…"
             ' 
             ' mnuSettings
             ' 
-            mnuSettings.DropDownItems.AddRange(New ToolStripItem() {mnuRules, mnuWebCrawler, mnuAdvancedClipboard, mnuOptions, sepSettings1, mnuShowConfig, sepSettings2, AdvancedClipboardFunctionsToolStripMenuItem})
+            mnuSettings.DropDownItems.AddRange(New ToolStripItem() {mnuRules, mnuWebCrawler, mnuApiIntegration, mnuAdvancedClipboard, mnuOptions, sepSettings1, mnuShowConfig, sepSettings2, AdvancedClipboardFunctionsToolStripMenuItem})
             mnuSettings.Name = "mnuSettings"
             mnuSettings.Size = New Size(61, 20)
             mnuSettings.Text = "&Settings"
@@ -460,6 +476,12 @@ Namespace Forms
             mnuWebCrawler.Name = "mnuWebCrawler"
             mnuWebCrawler.Size = New Size(231, 22)
             mnuWebCrawler.Text = "&WebCrawler…"
+            '
+            ' mnuApiIntegration
+            '
+            mnuApiIntegration.Name = "mnuApiIntegration"
+            mnuApiIntegration.Size = New Size(231, 22)
+            mnuApiIntegration.Text = "&API Integration…"
             ' 
             ' mnuAdvancedClipboard
             ' 
@@ -987,6 +1009,7 @@ Namespace Forms
         Friend WithEvents mnuSettings As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuRules As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuWebCrawler As System.Windows.Forms.ToolStripMenuItem
+        Friend WithEvents mnuApiIntegration As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuAdvancedClipboard As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuOptions As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents sepSettings1 As System.Windows.Forms.ToolStripSeparator
@@ -1041,6 +1064,8 @@ Namespace Forms
         Friend WithEvents ToolsToolStripMenuItem As ToolStripMenuItem
         Friend WithEvents mnu_tools_ConvertID As ToolStripMenuItem
         Friend WithEvents QuickWebLookupToolStripMenuItem As ToolStripMenuItem
+        Friend WithEvents ExportRowToolStripMenuItem As ToolStripMenuItem
+        Friend WithEvents ImportRecordsToolStripMenuItem As ToolStripMenuItem
         Friend WithEvents AdvancedClipboardFunctionsToolStripMenuItem As ToolStripMenuItem
         Friend WithEvents CopyToolStripMenuItem1 As ToolStripMenuItem
         Friend WithEvents Copy0ToolStripMenuItem As ToolStripMenuItem

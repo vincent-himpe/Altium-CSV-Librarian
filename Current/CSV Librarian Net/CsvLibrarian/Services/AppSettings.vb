@@ -31,6 +31,10 @@ Namespace Services
         ''' a jagged list (rows of columns). Empty/absent -> initialized to blanks.</summary>
         Public Property AdvancedClipboard As List(Of List(Of String)) = New List(Of List(Of String))()
 
+        ''' <summary>Supplier API credentials (Supplier API Integration window).
+        ''' Absent in JSON -> a blank record, saved on the next write.</summary>
+        Public Property SupplierApi As SupplierApiSettings = New SupplierApiSettings()
+
         Private Shared ReadOnly JsonOpts As New JsonSerializerOptions With {.WriteIndented = True}
 
         Private Shared Function SettingsPath() As String
@@ -47,7 +51,10 @@ Namespace Services
                 If File.Exists(path) Then
                     Dim json As String = File.ReadAllText(path, Encoding.UTF8)
                     Dim s = JsonSerializer.Deserialize(Of AppSettings)(json, JsonOpts)
-                    If s IsNot Nothing Then Return s
+                    If s IsNot Nothing Then
+                        If s.SupplierApi Is Nothing Then s.SupplierApi = New SupplierApiSettings()
+                        Return s
+                    End If
                 End If
             Catch
                 ' Ignore corrupt settings; fall back to defaults.
@@ -64,6 +71,17 @@ Namespace Services
             End Try
         End Sub
 
+    End Class
+
+    ''' <summary>Per-supplier API credentials edited in the Supplier API Integration
+    ''' window. All blank by default.</summary>
+    Public Class SupplierApiSettings
+        Public Property DigikeyClientId As String = ""
+        Public Property DigikeyAccessToken As String = ""
+        Public Property MouserApiKey As String = ""
+        Public Property LcscApiKey As String = ""
+        Public Property LcscApiSecret As String = ""
+        Public Property TmeApiToken As String = ""
     End Class
 
 End Namespace
