@@ -38,6 +38,9 @@ The Altium CSV Librarian allows you to quickly manipulate a set of of CSV Files.
 
 ## Main Window
 
+The available tables (CSV files) are shown in the table column on the left hand side. Data contained in the table is shown in a familiar spreadsheet style interface.
+Navigation int he table is done using the familiar excel-like arrow/enter/home/end and mouse operations including ctrl/shift/alt modifiers.
+
 ### File menu
 - **Open Folder… (Ctrl+O)** — Choose a working folder; loads every `.csv` in it, back-fills missing GUIDs, and adds the folder to the Recently Used list.
 - **Reload Folder (F5)** — Re-reads the current working folder from disk, discarding the in-memory view (unsaved edits are saved first). To be used if outside tools have added files.
