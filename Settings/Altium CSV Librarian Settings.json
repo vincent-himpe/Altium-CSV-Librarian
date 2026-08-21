@@ -1,9 +1,9 @@
 {
   "LastFolder": "C:\\GitHub\\FullyRouted-Altium-Library",
   "AutosaveSeconds": 30,
-  "AutosaveEnabled": true,
-  "AutoNormalizeOnSave": false,
-  "ArchiveOnExit": false,
+  "AutosaveEnabled": false,
+  "AutoNormalizeOnSave": true,
+  "ArchiveOnExit": true,
   "RecentFolders": [
     "C:\\GitHub\\FullyRouted-Altium-Library",
     "C:\\Users\\VincentHimpe\\Documents\\Altium CSV Librarian"
@@ -11,15 +11,15 @@
   "AdvancedClipboard": [
     [
       "KYOCERA",
-      "PANASONIC",
-      "VENKEL",
-      "KEMET",
-      "JOHANSON",
-      "CALCHIP",
-      "ROHM",
-      "FUJITSU TOWA",
-      "NIC",
-      "MATSUSHITA"
+      "siliconix",
+      "st",
+      "fairchild",
+      "maxim",
+      "harris",
+      "analog devices",
+      "sony",
+      "national semiconductor",
+      "ti"
     ],
     [
       "EBAY",
@@ -129,5 +129,13 @@
       "",
       ""
     ]
-  ]
+  ],
+  "SupplierApi": {
+    "DigikeyClientId": "",
+    "DigikeyAccessToken": "",
+    "MouserApiKey": "",
+    "LcscApiKey": "",
+    "LcscApiSecret": "",
+    "TmeApiToken": ""
+  }
 }
