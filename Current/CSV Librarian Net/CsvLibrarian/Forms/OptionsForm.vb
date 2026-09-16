@@ -1,5 +1,7 @@
+Imports System.Drawing
 Imports System.Windows.Forms
 Imports CsvLibrarian.Services
+Imports CsvLibrarian.Theme
 
 Namespace Forms
 
@@ -7,8 +9,7 @@ Namespace Forms
     ''' Editor for the persisted <see cref="AppSettings"/> (Altium CSV Librarian
     ''' Settings.json): autosave interval and the autosave / auto-normalize /
     ''' archive-on-exit toggles. OK writes the values back into the shared settings
-    ''' object and saves it; Cancel leaves everything unchanged. Standard Windows
-    ''' colour scheme (no theming).
+    ''' object and saves it; Cancel leaves everything unchanged. Dark colour scheme.
     ''' </summary>
     Public Class OptionsForm
 
@@ -17,11 +18,13 @@ Namespace Forms
         ''' <summary>Parameterless constructor for the Windows Forms designer.</summary>
         Public Sub New()
             InitializeComponent()
+            StyleDark()
             _settings = New AppSettings()
         End Sub
 
         Public Sub New(settings As AppSettings)
             InitializeComponent()
+            StyleDark()
             _settings = settings
             txtAutosave.Text = _settings.AutosaveSeconds.ToString()
             chkAutosaveEnabled.Checked = _settings.AutosaveEnabled
@@ -29,11 +32,16 @@ Namespace Forms
             chkArchiveExit.Checked = _settings.ArchiveOnExit
         End Sub
 
+        ''' <summary>Flat dark OK / Cancel buttons.</summary>
+        Private Sub StyleDark()
+            DarkTheme.StyleFlatButtons(okBtn, cancelBtn)
+        End Sub
+
         Private Sub okBtn_Click(sender As Object, e As EventArgs) Handles okBtn.Click
             Dim secs As Integer
             If Not Integer.TryParse(txtAutosave.Text.Trim(), secs) OrElse secs < 5 Then
-                MessageBox.Show(Me, "Enter the autosave interval as a whole number of seconds (5 or more).",
-                                "Options", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Options",
+                    "Enter the autosave interval as a whole number of seconds (5 or more).", icon:=DialogIcon.Warning)
                 Return
             End If
 
@@ -45,8 +53,8 @@ Namespace Forms
             Try
                 _settings.Save()
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not save the settings:" & vbCrLf & ex.Message,
-                                "Options", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Options", "Could not save the settings:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
                 Return   ' keep the window open
             End Try
 

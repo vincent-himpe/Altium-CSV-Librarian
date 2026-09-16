@@ -6,6 +6,7 @@ Imports System.Linq
 Imports System.Text
 Imports System.Text.Encodings.Web
 Imports System.Text.Json
+Imports System.Text.RegularExpressions
 Imports System.Windows.Forms
 Imports CsvLibrarian.Models
 Imports CsvLibrarian.Services
@@ -41,6 +42,17 @@ Namespace Forms
         ' The non-modal Import Records window (single instance).
         Private _importForm As ImportRecordsForm = Nothing
 
+        ' Row index currently painted with the light-cyan "current row" highlight.
+        Private _highlightRow As Integer = -1
+
+        ' Backup preview: when previewing, the grid shows a read-only, light "inverted"
+        ' view of a backup file and the active document is left untouched.
+        Private _previewing As Boolean = False
+        Private _previewPath As String = Nothing
+        Private _suppressBackupEvent As Boolean = False   ' guards cboBackups during repopulate
+        Private Const CurrentLabel As String = "Current"
+        Private Shared ReadOnly DividerItem As New Object()   ' sentinel: the separator row
+
         ' Right-click "search this part number" menu (built on demand from the web config).
         Private WithEvents _webMenu As New ContextMenuStrip()
         Private _webMenuCellText As String = ""
@@ -65,101 +77,98 @@ Namespace Forms
             _startFolder = startFolder
         End Sub
 
+        ''' <summary>
+        ''' The dark Altium-style colours are set directly on the controls in the
+        ''' designer (or inherited from the form). This method only handles what the
+        ''' designer can't cleanly do: fonts, the flat dark toolbar buttons (visual-
+        ''' styled buttons ignore BackColor, so they need FlatStyle), the toolbar strip
+        ''' shade, the data grid, tooltips, and the empty-state labels.
+        ''' </summary>
         Private Sub ApplyTheme()
-            Me.BackColor = Palette.Bg
-            Me.ForeColor = Palette.TextColor
             Me.Font = New Font("Segoe UI", 9.0F)
 
-            ' Split / sidebar
-            split.BackColor = Palette.Border
-            split.Panel2.BackColor = Palette.Bg
-            ' The Libraries group and its panel use the standard Windows scheme
-            ' (no dark theming), so they must be pinned to system colours rather
-            ' than inheriting the form's dark ambient background.
-            split.Panel1.BackColor = SystemColors.Control
-            grpLibraries.BackColor = SystemColors.Control
-            grpLibraries.ForeColor = SystemColors.ControlText
-            grpLibraries.Font = New Font("Segoe UI", 9.0F, FontStyle.Bold)
-            ' fileList keeps standard Windows styling, but pin a regular-weight font
-            ' so it doesn't inherit the group box's bold caption font.
-            fileList.Font = New Font("Segoe UI", 9.5F, FontStyle.Regular)
+            ' Dark menus/dropdowns/context menus (applies app-wide via the manager).
+            ToolStripManager.Renderer = New DarkMenuRenderer()
 
-            ' Grid toolbar — standard Windows colours (no dark theming).
-            gridToolbar.BackColor = SystemColors.Control
-            rightCluster.BackColor = SystemColors.Control
-            backupCluster.BackColor = SystemColors.Control
-            lblBackups.ForeColor = SystemColors.ControlText
+            fileList.Font = New Font("Segoe UI", 9.5F, FontStyle.Regular)
             lblBackups.Font = New Font("Segoe UI", 9.0F)
+            lblBackups.ForeColor = Color.FromArgb(220, 220, 220)
             cboBackups.Font = New Font("Segoe UI", 9.0F)
+
+            ' Toolbar strip a touch lighter than the form so it reads as a band.
+            gridToolbar.BackColor = Color.FromArgb(62, 62, 66)
+            rightCluster.BackColor = Color.FromArgb(62, 62, 66)
+            backupCluster.BackColor = Color.FromArgb(62, 62, 66)
+            divider.BackColor = Color.FromArgb(80, 80, 85)
+
+            ' Toolbar buttons: flat, dark (FlatStyle is required for the BackColor to
+            ' render — visual-styled buttons ignore it).
+            DarkTheme.StyleFlatButtons(btnAutosize, btnNormalize, btnSave, btnSaveAll, btnUnsort, btnDeleteRow,
+                                       btnLocationAnalysis, btnIntegrityCheck, btnLocationReport, btnCreateArchive, btnRestore)
+
+            ' Glyph buttons use Segoe Fluent Icons → Segoe MDL2 Assets → Segoe UI Symbol.
+            Dim glyphFont = DarkTheme.GlyphFont(12.0F, FontStyle.Bold)
+            For Each b As Button In {btnAutosize, btnNormalize, btnSave, btnSaveAll, btnUnsort, btnDeleteRow,
+                                     btnLocationAnalysis, btnIntegrityCheck, btnLocationReport, btnCreateArchive}
+                b.Font = glyphFont
+            Next
+            btnAutosize.Text = ChrW(&HE799).ToString()          ' fit width
+            btnNormalize.Text = ChrW(&HE794).ToString()         ' edit / normalize
+            btnSave.Text = ChrW(&HE105).ToString()              ' save
+            btnSaveAll.Text = ChrW(&HE105).ToString()           ' save all
+            btnUnsort.Text = ChrW(&HE8B2).ToString()            ' remove sort
+            btnDeleteRow.Text = ChrW(&HE74D).ToString()         ' delete
+            btnLocationAnalysis.Text = ChrW(&HE163).ToString()  ' location analysis
+            btnIntegrityCheck.Text = ChrW(&HF28B).ToString()    ' integrity check
+            btnLocationReport.Text = ChrW(&HE749).ToString()    ' location report (print)
+            btnCreateArchive.Text = ChrW(&HF012).ToString()     ' create archive
             btnRestore.Font = New Font("Segoe UI", 9.0F)
-            divider.BackColor = SystemColors.ControlDark
+
+            ' Icon colours: light blue, except Save All (green) and Delete Row (red).
+            For Each b As Button In {btnAutosize, btnNormalize, btnSave, btnUnsort,
+                                     btnLocationAnalysis, btnIntegrityCheck, btnLocationReport, btnCreateArchive}
+                b.ForeColor = DarkTheme.IconBlue
+            Next
+            btnSaveAll.ForeColor = DarkTheme.IconGreen
+            btnDeleteRow.ForeColor = DarkTheme.IconRed
+
             _toolTip.SetToolTip(cboBackups, "Backups of the current file (newest first)")
             _toolTip.SetToolTip(btnRestore, "Load the selected backup into the grid (does not autosave)")
-
-            ' Toolbar icon buttons. Use Segoe UI Symbol (monochrome pictographs) so
-            ' the glyphs honour a black ForeColor rather than rendering as washed-out
-            ' colour emoji. Disabled buttons keep the system's greyed rendering.
-            Dim iconFont As New Font("Segoe UI Symbol", 11.0F)
-            For Each b As Button In {btnAutosize, btnNormalize, btnSave, btnSaveAll}
-                b.Font = iconFont
-                b.ForeColor = Color.Black
-            Next
             _toolTip.SetToolTip(btnAutosize, "Autosize columns (Ctrl+Q)")
             _toolTip.SetToolTip(btnNormalize, "Normalize Description (Ctrl+N)")
             _toolTip.SetToolTip(btnSave, "Save (Ctrl+S)")
             _toolTip.SetToolTip(btnSaveAll, "Save All (Ctrl+Shift+S)")
+            _toolTip.SetToolTip(btnUnsort, "Unsort — restore CSV order (Ctrl+U)")
+            _toolTip.SetToolTip(btnDeleteRow, "Delete the current row (cannot be undone)")
+            _toolTip.SetToolTip(btnLocationAnalysis, "Location Analysis")
+            _toolTip.SetToolTip(btnIntegrityCheck, "Integrity Check")
+            _toolTip.SetToolTip(btnLocationReport, "Location Report")
+            _toolTip.SetToolTip(btnCreateArchive, "Create Archive")
 
             StyleGrid()
             ' Copy uses our own single-cell clipboard, never the Windows clipboard.
             grid.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable
 
-            ' Empty state
-            emptyPanel.BackColor = Palette.Bg
-            lblEmptyIcon.ForeColor = Palette.TextDim
+            ' Empty-state labels (background inherited dark from the form).
             lblEmptyIcon.BackColor = Color.Transparent
+            lblEmptyIcon.ForeColor = Color.FromArgb(90, 90, 96)
             lblEmptyIcon.Font = New Font("Segoe UI Emoji", 34.0F)
-            lblEmpty1.ForeColor = Palette.TextMuted
             lblEmpty1.BackColor = Color.Transparent
+            lblEmpty1.ForeColor = Color.FromArgb(157, 157, 160)
             lblEmpty1.Font = New Font("Segoe UI", 14.0F)
-            lblEmpty2.ForeColor = Palette.TextDim
             lblEmpty2.BackColor = Color.Transparent
+            lblEmpty2.ForeColor = Color.FromArgb(120, 120, 124)
             lblEmpty2.Font = New Font("Segoe UI", 9.5F)
             CenterEmptyLabels()
-
-            ApplyStandardChrome()
         End Sub
 
-        ''' <summary>
-        ''' Keep the menu bar and status bar as standard Windows chrome. Their
-        ''' BackColor/ForeColor are ambient, so without this they inherit the form's
-        ''' dark theme (the status labels in particular paint themselves black).
-        ''' </summary>
-        Private Sub ApplyStandardChrome()
-            menuStrip.BackColor = SystemColors.Control
-            menuStrip.ForeColor = SystemColors.ControlText
-
-            statusStrip.BackColor = SystemColors.Control
-            statusStrip.ForeColor = SystemColors.ControlText
-            For Each it As ToolStripItem In statusStrip.Items
-                it.BackColor = SystemColors.Control
-                it.ForeColor = SystemColors.ControlText
-            Next
-        End Sub
-
-        ''' <summary>Light grid: dark-grey editable text on alternating white /
-        ''' light-grey rows; monospace cells read well for component values.</summary>
+        ''' <summary>Dark grid: light monospaced text on two shades of grey (alternating
+        ''' rows); dark bold header; blue selection.</summary>
         Private Sub StyleGrid()
-            grid.BackgroundColor = Color.White
-            grid.DefaultCellStyle.BackColor = Color.White
-            grid.DefaultCellStyle.ForeColor = Color.FromArgb(60, 60, 60)   ' dark grey
+            DarkTheme.StyleGrid(grid)
+            ' Main grid uses a monospaced cell/header font and a little padding.
             grid.DefaultCellStyle.Font = New Font("Consolas", 9.5F)
             grid.DefaultCellStyle.Padding = New Padding(3, 0, 3, 0)
-            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245)  ' light grey
-            ' Header row: medium grey background, bold black text.
-            grid.EnableHeadersVisualStyles = False
-            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(190, 190, 190)
-            grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black
-            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(190, 190, 190)
             grid.ColumnHeadersDefaultCellStyle.Font = New Font("Consolas", 9.0F, FontStyle.Bold)
             grid.ColumnHeadersDefaultCellStyle.Padding = New Padding(8, 4, 4, 4)
             grid.RowTemplate.Height = 24
@@ -200,17 +209,24 @@ Namespace Forms
             End If
         End Sub
 
+        Private Sub HandleFormShown(sender As Object, e As EventArgs) Handles Me.Shown
+            ' Smooth repaints on scroll / row insert for large tables (no flicker/lag).
+            NativeDark.EnableDoubleBuffer(grid)
+
+            ' Dark scrollbars (best-effort; needs Win10 1809+ and created handles).
+            NativeDark.ApplyDarkScrollbars(grid)
+            NativeDark.ApplyDarkScrollbars(fileList)
+            NativeDark.ApplyDarkScrollbars(cboBackups)
+        End Sub
+
         Private Sub HandleFormClosing(sender As Object, e As FormClosingEventArgs) Handles Me.FormClosing
             grid.EndEdit()
 
             ' Unsaved work on exit always prompts (regardless of the autosave toggle).
             If _order.Any(Function(fn) _docs(fn).Dirty) Then
-                Dim r = MessageBox.Show(Me,
-                    "You have unsaved changes." & vbCrLf & vbCrLf &
-                    "Yes — save all and exit" & vbCrLf &
-                    "No — discard changes and exit" & vbCrLf &
-                    "Cancel — keep editing",
-                    "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning)
+                Dim r = ConfirmDialog.Choose(Me, "Unsaved changes",
+                    "You have unsaved changes. What would you like to do?",
+                    yesText:="Save and Exit", noText:="Discard and Exit", cancelText:="Keep Editing")
                 Select Case r
                     Case DialogResult.Cancel
                         e.Cancel = True
@@ -295,8 +311,8 @@ Namespace Forms
             Dim folder = TryCast(item.Tag, String)
             If String.IsNullOrEmpty(folder) Then Return
             If Not Directory.Exists(folder) Then
-                MessageBox.Show(Me, "The folder no longer exists:" & vbCrLf & folder,
-                                "Recently Used", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Recently Used", "The folder no longer exists:" & vbCrLf & folder,
+                                     icon:=DialogIcon.Warning)
                 _settings.RecentFolders.RemoveAll(
                     Function(f) String.Equals(f, folder, StringComparison.OrdinalIgnoreCase))
                 _settings.Save()
@@ -317,8 +333,8 @@ Namespace Forms
             Try
                 Process.Start(New ProcessStartInfo With {.FileName = _folder, .UseShellExecute = True})
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not open the folder:" & vbCrLf & ex.Message,
-                                "Open Working Folder", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Open Working Folder", "Could not open the folder:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Warning)
             End Try
         End Sub
 
@@ -345,8 +361,8 @@ Namespace Forms
                 End If
             Catch ex As Exception
                 _config = New NormalizerConfig()
-                MessageBox.Show(Me, "Could not read normalizer.json:" & vbCrLf & ex.Message,
-                                "Rules", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Rules", "Could not read normalizer.json:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Warning)
             End Try
 
             Dim patched As New List(Of String)()
@@ -371,6 +387,7 @@ Namespace Forms
 
             _order.Sort(StringComparer.OrdinalIgnoreCase)
             RefreshFileList()
+            SetIntegrityIcon(IntegrityState.Neutral)   ' the set of files changed
 
             If _order.Count > 0 Then
                 OpenFile(_order(0))
@@ -391,6 +408,9 @@ Namespace Forms
             If Not _docs.ContainsKey(name) Then Return
             Dim doc = _docs(name)
 
+            ' Leave any backup preview: switching files always returns to editable/dark.
+            If _previewing Then EnterEditableStyle()
+
             _loading = True
             _activeName = name
             bindingSrc.DataSource = doc.Table
@@ -410,21 +430,205 @@ Namespace Forms
 
         ' ── Backups (grid-toolbar dropdown + Restore) ──────────────────────────────
 
-        ''' <summary>Populate the toolbar dropdown with the active file's backups
-        ''' (newest first) and enable Restore only when at least one exists.</summary>
+        ''' <summary>
+        ''' Populate the toolbar dropdown: a "Current" entry (the live editable file),
+        ''' then a divider, then the file's backups (newest first). Selecting Current
+        ''' returns to the editable file; selecting a backup previews it read-only.
+        ''' Reselects the previewed backup (if any) so a mid-preview refresh is seamless.
+        ''' </summary>
         Private Sub RefreshBackupList()
+            _suppressBackupEvent = True
             cboBackups.BeginUpdate()
             cboBackups.Items.Clear()
-            If _activeName IsNot Nothing AndAlso _docs.ContainsKey(_activeName) Then
-                For Each b In BackupService.ListBackups(_docs(_activeName).Path)
-                    cboBackups.Items.Add(b)
-                Next
+
+            Dim hasFile = _activeName IsNot Nothing AndAlso _docs.ContainsKey(_activeName)
+            If hasFile Then
+                cboBackups.Items.Add(CurrentLabel)
+                Dim backups = BackupService.ListBackups(_docs(_activeName).Path)
+                If backups.Count > 0 Then
+                    cboBackups.Items.Add(DividerItem)
+                    For Each b In backups
+                        cboBackups.Items.Add(b)
+                    Next
+                End If
             End If
             cboBackups.EndUpdate()
+
+            Dim idx As Integer = 0
+            If _previewing AndAlso _previewPath IsNot Nothing Then
+                Dim found = FindBackupIndex(_previewPath)
+                If found >= 0 Then idx = found
+            End If
+            If cboBackups.Items.Count > 0 Then cboBackups.SelectedIndex = Math.Min(idx, cboBackups.Items.Count - 1)
+            cboBackups.Enabled = hasFile
+            UpdateBackupButtons()
+            _suppressBackupEvent = False
+        End Sub
+
+        ''' <summary>Index of the dropdown item whose backup path matches, or -1.</summary>
+        Private Function FindBackupIndex(path As String) As Integer
+            For i As Integer = 0 To cboBackups.Items.Count - 1
+                Dim bi = TryCast(cboBackups.Items(i), BackupInfo)
+                If bi IsNot Nothing AndAlso String.Equals(bi.Path, path, StringComparison.OrdinalIgnoreCase) Then Return i
+            Next
+            Return -1
+        End Function
+
+        ''' <summary>Restore is only meaningful when a backup (not "Current") is showing.</summary>
+        Private Sub UpdateBackupButtons()
+            btnRestore.Enabled = TypeOf cboBackups.SelectedItem Is BackupInfo
+        End Sub
+
+        Private Sub SelectCurrentSuppressed()
+            _suppressBackupEvent = True
             If cboBackups.Items.Count > 0 Then cboBackups.SelectedIndex = 0
-            Dim has = cboBackups.Items.Count > 0
-            cboBackups.Enabled = has
-            btnRestore.Enabled = has
+            _suppressBackupEvent = False
+            UpdateBackupButtons()
+        End Sub
+
+        Private Sub SelectBackupSuppressed(path As String)
+            Dim idx = FindBackupIndex(path)
+            If idx >= 0 Then
+                _suppressBackupEvent = True
+                cboBackups.SelectedIndex = idx
+                _suppressBackupEvent = False
+            End If
+            UpdateBackupButtons()
+        End Sub
+
+        ''' <summary>Dropdown changed: preview a backup, or return to the editable file.</summary>
+        Private Sub cboBackups_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cboBackups.SelectedIndexChanged
+            If _suppressBackupEvent Then Return
+            Dim item = cboBackups.SelectedItem
+            If item Is DividerItem Then
+                ' The separator isn't a real choice — snap back to what we were showing.
+                SelectBackupOrCurrentSuppressed()
+                Return
+            End If
+            If TypeOf item Is BackupInfo Then
+                PreviewBackup(DirectCast(item, BackupInfo))
+            Else
+                ShowCurrent()
+            End If
+            UpdateBackupButtons()
+        End Sub
+
+        Private Sub SelectBackupOrCurrentSuppressed()
+            If _previewing AndAlso _previewPath IsNot Nothing Then
+                SelectBackupSuppressed(_previewPath)
+            Else
+                SelectCurrentSuppressed()
+            End If
+        End Sub
+
+        ''' <summary>
+        ''' Load a backup into the grid as a read-only, light "inverted" preview. The
+        ''' active document is left as-is. The very first hop from the editable file into
+        ''' history, when the file is dirty, prompts to Save and Proceed (or Cancel).
+        ''' </summary>
+        Private Sub PreviewBackup(entry As BackupInfo)
+            If entry Is Nothing OrElse _activeName Is Nothing Then Return
+            Dim path = entry.Path
+            Dim label = entry.ToString()
+            If Not File.Exists(path) Then
+                SetStatus("That backup no longer exists on disk", Palette.Warning)
+                RefreshBackupList()
+                Return
+            End If
+
+            ' First hop from the live file into history: persist unsaved edits first.
+            If Not _previewing AndAlso _docs(_activeName).Dirty Then
+                Dim proceed = ConfirmDialog.Ask(Me, "Unsaved changes",
+                    $"""{_activeName}"" has unsaved edits." & vbCrLf & vbCrLf &
+                    "Save the file before viewing this backup?",
+                    okText:="Save and Proceed", cancelText:="Cancel")
+                If Not proceed Then
+                    SelectCurrentSuppressed()
+                    Return
+                End If
+                SaveActive(silent:=True)   ' also refreshes the backup list (suppressed)
+            End If
+
+            Dim table As DataTable
+            Try
+                table = CsvService.ReadCsv(path)
+            Catch ex As Exception
+                ConfirmDialog.Notify(Me, "Backup preview", "Could not read the backup:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
+                SelectCurrentSuppressed()
+                Return
+            End Try
+
+            grid.EndEdit()
+            StopAutosave()
+            _previewing = True
+            _previewPath = path
+            _loading = True
+            grid.DataSource = Nothing
+            bindingSrc.DataSource = table
+            grid.DataSource = bindingSrc
+            _loading = False
+            grid.ReadOnly = True
+            StyleGridPreview()
+            AutoSizeColumns()
+            Me.Text = $"{_baseCaption} ({_activeName} — backup {label}) [read-only]"
+            UpdateFileScopedMenus()
+            ' If we saved above, the list refresh reset the dropdown to Current — repoint it.
+            SelectBackupSuppressed(path)
+            SetStatus($"Previewing backup {label} — read-only", Palette.Warning)
+        End Sub
+
+        ''' <summary>Return the grid to the live, editable, dark-themed active document.</summary>
+        Private Sub ShowCurrent()
+            If _activeName Is Nothing Then Return
+            Dim wasPreview = _previewing
+            EnterEditableStyle()
+            If wasPreview Then
+                grid.EndEdit()
+                _loading = True
+                grid.DataSource = Nothing
+                bindingSrc.DataSource = _docs(_activeName).Table
+                grid.DataSource = bindingSrc
+                _loading = False
+                ApplyGuidColumnStyle()
+                AutoSizeColumns()
+            End If
+            Me.Text = $"{_baseCaption} ({_activeName})"
+            UpdateFileScopedMenus()
+            UpdateStatusFromDirty(_docs(_activeName).Dirty)
+            UpdateBackupButtons()
+        End Sub
+
+        ''' <summary>Clear preview state and restore the normal dark, editable grid look.</summary>
+        Private Sub EnterEditableStyle()
+            _previewing = False
+            _previewPath = Nothing
+            grid.ReadOnly = False
+            StyleGrid()
+        End Sub
+
+        ''' <summary>Inverted light read-only look so a backup is obviously not the live file:
+        ''' black text on 95%/90% white alternating rows, light selection, grey header.</summary>
+        Private Sub StyleGridPreview()
+            grid.BackgroundColor = Color.FromArgb(242, 242, 242)
+            grid.GridColor = Color.FromArgb(200, 200, 204)
+            grid.EnableHeadersVisualStyles = False
+            grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single
+            grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(210, 210, 214)
+            grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black
+            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(210, 210, 214)
+            grid.ColumnHeadersDefaultCellStyle.Font = New Font("Consolas", 9.0F, FontStyle.Bold)
+            grid.ColumnHeadersDefaultCellStyle.Padding = New Padding(8, 4, 4, 4)
+            grid.DefaultCellStyle.BackColor = Color.FromArgb(242, 242, 242)      ' 95% white
+            grid.DefaultCellStyle.ForeColor = Color.Black
+            grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(180, 205, 235)
+            grid.DefaultCellStyle.SelectionForeColor = Color.Black
+            grid.DefaultCellStyle.Font = New Font("Consolas", 9.5F)
+            grid.DefaultCellStyle.Padding = New Padding(3, 0, 3, 0)
+            grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(230, 230, 230)   ' 90% white
+            grid.AlternatingRowsDefaultCellStyle.ForeColor = Color.Black
+            grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = Color.FromArgb(180, 205, 235)
+            grid.RowTemplate.Height = 24
         End Sub
 
         ''' <summary>Load the selected backup into the active document and rebind the
@@ -440,31 +644,36 @@ Namespace Forms
                 Return
             End If
 
-            Dim r = MessageBox.Show(Me,
-                $"Restore the backup from {entry.ToString()} into ""{_activeName}""?" & vbCrLf &
-                "This replaces the current grid contents. It will not be saved" & vbCrLf &
-                "automatically — use Save to keep it.",
-                "Restore backup", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
-            If r <> DialogResult.Yes Then Return
+            Dim proceed = ConfirmDialog.Ask(Me, "Restore backup",
+                $"Restore the backup from {entry.ToString()} into ""{_activeName}""?" & vbCrLf & vbCrLf &
+                "This replaces the current grid contents. It will not be saved automatically — use Save to keep it.",
+                okText:="Restore", cancelText:="Cancel")
+            If Not proceed Then Return
 
             Dim table As DataTable = Nothing
             Try
                 table = CsvService.ReadCsv(entry.Path)
                 GuidService.InjectGuids(table)   ' safety: back-fill if an old backup lacks GUIDs
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not read the backup:" & vbCrLf & ex.Message,
-                                "Restore backup", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Restore backup", "Could not read the backup:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
                 Return
             End Try
 
             grid.EndEdit()
             ' Stop any pending autosave so the restored data is never auto-persisted,
-            ' then rebind (guarded by _loading, so CellValueChanged does not fire).
+            ' then leave preview mode and rebind (guarded by _loading, so CellValueChanged
+            ' does not fire). The restored data becomes the live editable file.
             StopAutosave()
+            EnterEditableStyle()
             RebindActiveTable(table)
             _docs(_activeName).Dirty = True
+            SetIntegrityIcon(IntegrityState.Neutral)   ' restored data invalidates the last check
+            Me.Text = $"{_baseCaption} ({_activeName})"
             RefreshFileList()
+            RefreshBackupList()      ' back on "Current"
             UpdateRowCount()
+            UpdateFileScopedMenus()
             UpdateStatusFromDirty(True)
             SetStatus($"Restored backup {entry.ToString()} — not yet saved", Palette.Success)
         End Sub
@@ -499,11 +708,10 @@ Namespace Forms
             If _activeName Is Nothing Then Return
             Dim name = _activeName
             If _docs(name).Dirty Then
-                Dim r = MessageBox.Show(Me,
+                If Not ConfirmDialog.Ask(Me, "Unsaved changes",
                     $"""{name}"" has unsaved changes. Remove from the list anyway?" & vbCrLf &
                     "(This does not delete the file on disk.)",
-                    "Unsaved changes", MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
-                If r <> DialogResult.Yes Then Return
+                    okText:="Remove", cancelText:="Cancel", icon:=DialogIcon.Warning) Then Return
             End If
             _docs.Remove(name)
             _order.Remove(name)
@@ -524,14 +732,106 @@ Namespace Forms
             ApplyGuidColumnStyle()
         End Sub
 
+        ''' <summary>When the current cell moves, repaint just the old and new rows so
+        ''' the light-cyan current-row highlight follows the cursor. Cheap: only two
+        ''' rows are invalidated; the colour itself is applied in <see cref="grid_CellFormatting"/>.</summary>
+        Private Sub OnCurrentCellChanged(sender As Object, e As EventArgs) Handles grid.CurrentCellChanged
+            If _highlightRow >= 0 AndAlso _highlightRow < grid.RowCount Then grid.InvalidateRow(_highlightRow)
+            _highlightRow = If(grid.CurrentCell IsNot Nothing, grid.CurrentCell.RowIndex, -1)
+            If _highlightRow >= 0 AndAlso _highlightRow < grid.RowCount Then grid.InvalidateRow(_highlightRow)
+        End Sub
+
+        ''' <summary>Tint the current cell's row light-cyan (foreground untouched). The
+        ''' selected cell still renders with the standard selection colours, since those
+        ''' take over for selected cells.</summary>
+        Private Sub grid_CellFormatting(sender As Object, e As DataGridViewCellFormattingEventArgs) Handles grid.CellFormatting
+            ' Index/GUID column is read-only: keep it a uniform muted grey on every row —
+            ' it must not alternate, take the current-row tint, or highlight on selection,
+            ' so it always reads as "not editable" (in both the live and backup views).
+            If e.ColumnIndex = 0 Then
+                Dim guidBack = If(_previewing, Color.FromArgb(222, 222, 226), Color.FromArgb(42, 42, 46))
+                Dim guidFore = If(_previewing, Color.FromArgb(90, 90, 95), Color.FromArgb(157, 157, 160))
+                e.CellStyle.BackColor = guidBack
+                e.CellStyle.ForeColor = guidFore
+                e.CellStyle.SelectionBackColor = guidBack
+                e.CellStyle.SelectionForeColor = guidFore
+                Return
+            End If
+
+            If grid.CurrentCell IsNot Nothing AndAlso e.RowIndex = grid.CurrentCell.RowIndex Then
+                ' Light tint while previewing a backup, the usual blue-grey otherwise.
+                e.CellStyle.BackColor = If(_previewing, Color.FromArgb(205, 222, 240), Color.FromArgb(110, 145, 175))
+            End If
+        End Sub
+
+        ''' <summary>Owner-draw the file list so the selected item uses the active-cell
+        ''' blue (dark background / light text otherwise).</summary>
+        Private Sub fileList_DrawItem(sender As Object, e As DrawItemEventArgs) Handles fileList.DrawItem
+            If e.Index < 0 Then Return
+            Dim text = fileList.Items(e.Index).ToString()
+            Dim selected = (e.State And DrawItemState.Selected) = DrawItemState.Selected
+            Dim back = If(selected, Color.FromArgb(61, 92, 135), fileList.BackColor)
+            Dim fore = If(selected, Color.White, fileList.ForeColor)
+            Using b As New SolidBrush(back)
+                e.Graphics.FillRectangle(b, e.Bounds)
+            End Using
+            TextRenderer.DrawText(e.Graphics, text, fileList.Font, e.Bounds, fore,
+                                  TextFormatFlags.Left Or TextFormatFlags.VerticalCenter)
+            If selected Then e.DrawFocusRectangle()
+        End Sub
+
+        ''' <summary>Owner-draw the backups dropdown so the highlighted list item uses
+        ''' the active-cell blue (the closed display stays dark).</summary>
+        Private Sub cboBackups_DrawItem(sender As Object, e As DrawItemEventArgs) Handles cboBackups.DrawItem
+            If e.Index < 0 Then
+                e.DrawBackground()
+                Return
+            End If
+            Dim item = cboBackups.Items(e.Index)
+
+            ' Separator row: fill dark, draw a thin rule, never highlight.
+            If item Is DividerItem Then
+                Using bg As New SolidBrush(cboBackups.BackColor)
+                    e.Graphics.FillRectangle(bg, e.Bounds)
+                End Using
+                Dim y = e.Bounds.Top + e.Bounds.Height \ 2
+                Using p As New Pen(Color.FromArgb(90, 90, 95))
+                    e.Graphics.DrawLine(p, e.Bounds.Left + 4, y, e.Bounds.Right - 4, y)
+                End Using
+                Return
+            End If
+
+            Dim text As String
+            If TypeOf item Is BackupInfo Then
+                text = DirectCast(item, BackupInfo).ToString()
+            Else
+                text = Convert.ToString(item)   ' the "Current" label
+            End If
+            Dim editPortion = (e.State And DrawItemState.ComboBoxEdit) = DrawItemState.ComboBoxEdit
+            Dim selected = (Not editPortion) AndAlso ((e.State And DrawItemState.Selected) = DrawItemState.Selected)
+            Dim back = If(selected, Color.FromArgb(61, 92, 135), cboBackups.BackColor)
+            Dim fore = If(selected, Color.White, cboBackups.ForeColor)
+            Using b As New SolidBrush(back)
+                e.Graphics.FillRectangle(b, e.Bounds)
+            End Using
+            TextRenderer.DrawText(e.Graphics, text, cboBackups.Font, e.Bounds, fore,
+                                  TextFormatFlags.Left Or TextFormatFlags.VerticalCenter)
+        End Sub
+
         ''' <summary>Mark the GUID (first) column read-only with a standard, subtle
         ''' greyed background so it reads as non-editable.</summary>
         Private Sub ApplyGuidColumnStyle()
             If grid.Columns.Count = 0 Then Return
             Dim guidCol = grid.Columns(0)
             guidCol.ReadOnly = True
-            guidCol.DefaultCellStyle.BackColor = SystemColors.Control
-            guidCol.DefaultCellStyle.ForeColor = SystemColors.GrayText
+            If _previewing Then
+                ' Match the light read-only preview (a shade darker than the cells).
+                guidCol.DefaultCellStyle.BackColor = Color.FromArgb(222, 222, 226)
+                guidCol.DefaultCellStyle.ForeColor = Color.FromArgb(90, 90, 95)
+            Else
+                guidCol.DefaultCellStyle.BackColor = Color.FromArgb(42, 42, 46)
+                guidCol.DefaultCellStyle.ForeColor = Color.FromArgb(157, 157, 160)
+            End If
         End Sub
 
         Private Sub AutoSizeColumns()
@@ -547,6 +847,21 @@ Namespace Forms
                 End If
             Next
             grid.ResumeLayout()
+        End Sub
+
+        ''' <summary>Remove any column sort so the grid shows rows in their underlying
+        ''' CSV/DataTable order again, and clear the header sort glyphs.</summary>
+        Private Sub Unsort()
+            If ActiveTable Is Nothing Then Return
+            grid.EndEdit()
+            Try
+                bindingSrc.RemoveSort()
+            Catch
+                ' Nothing to remove.
+            End Try
+            For Each c As DataGridViewColumn In grid.Columns
+                c.HeaderCell.SortGlyphDirection = SortOrder.None
+            Next
         End Sub
 
         Private Sub ShowGrid()
@@ -582,20 +897,25 @@ Namespace Forms
         ' ── Editing ──────────────────────────────────────────────────────────────
 
         Private Sub OnCellValueChanged(sender As Object, e As DataGridViewCellEventArgs) Handles grid.CellValueChanged
-            If _loading Then Return
+            If _loading OrElse _previewing Then Return
             MarkActiveDirty()
         End Sub
 
         Private Sub MarkActiveDirty()
             If _activeName Is Nothing Then Return
+            ' The sidebar only changes when the file first becomes dirty — rebuilding it
+            ' on every keystroke/insert is wasted work (and flicker) on large tables.
+            Dim wasDirty = _docs(_activeName).Dirty
             _docs(_activeName).Dirty = True
-            RefreshFileList()
+            If Not wasDirty Then RefreshFileList()
             UpdateRowCount()
             UpdateStatusFromDirty(True)
             RestartAutosave()
+            SetIntegrityIcon(IntegrityState.Neutral)   ' an edit invalidates the last check
         End Sub
 
         Private Sub AddRow(cloneLast As Boolean)
+            If _previewing Then Return
             Dim table = ActiveTable
             If table Is Nothing Then Return
             grid.EndEdit()
@@ -610,23 +930,89 @@ Namespace Forms
                     row(i) = ""
                 End If
             Next
+            AppendRowAndSelect(row, beginEdit:=True)
+        End Sub
+
+        ''' <summary>
+        ''' Add an already-populated row to the active table, mark the file dirty, then
+        ''' select and scroll to the row's first editable cell. Shared by <see cref="AddRow"/>
+        ''' and <see cref="ImportRecordIntoGrid"/>. Selection/scroll is best-effort.
+        ''' </summary>
+        Private Function AppendRowAndSelect(row As DataRow, beginEdit As Boolean) As Integer
+            Dim table = ActiveTable
+            If table Is Nothing Then Return -1
             table.Rows.Add(row)
             MarkActiveDirty()
 
-            ' Select the first editable cell of the new row.
+            Dim viewIndex As Integer = -1
             Try
-                Dim viewIndex = bindingSrc.Count - 1
+                viewIndex = bindingSrc.Count - 1
                 If viewIndex >= 0 Then
                     grid.ClearSelection()
                     Dim colIndex = If(grid.Columns.Count > 1, 1, 0)
                     grid.CurrentCell = grid.Rows(viewIndex).Cells(colIndex)
                     grid.FirstDisplayedScrollingRowIndex = Math.Max(0, viewIndex)
-                    If colIndex > 0 Then grid.BeginEdit(True)
+                    If beginEdit AndAlso colIndex > 0 Then grid.BeginEdit(True)
                 End If
             Catch
                 ' Selection is best-effort.
             End Try
+            Return viewIndex
+        End Function
+
+        ''' <summary>Copy Down (Safe): copy the cell above only when the cell above has
+        ''' data AND the current cell is empty. On success, move down only if the cell
+        ''' below exists and is also empty. The GUID column and top row are protected.</summary>
+        Private Sub CopyDownSafe()
+            If _previewing Then Return
+            If grid.CurrentCell Is Nothing Then Return
+            Dim col = grid.CurrentCell.ColumnIndex
+            Dim rowView = grid.CurrentCell.RowIndex
+            If col = 0 Then Return                        ' never touch the GUID column
+            If rowView <= 0 Then Return                   ' no cell above
+            grid.EndEdit()
+
+            Dim aboveVal = grid.Rows(rowView - 1).Cells(col).Value
+            Dim aboveText = If(aboveVal Is Nothing, "", aboveVal.ToString())
+            If aboveText.Length = 0 Then Return           ' cell above empty -> do nothing
+
+            Dim curVal = grid.CurrentCell.Value
+            Dim curText = If(curVal Is Nothing, "", curVal.ToString())
+            If curText.Length > 0 Then Return             ' current cell has data -> do nothing
+
+            ' In the Location column, Copy Down increments the numeric suffix
+            ' (MARS177 -> MARS178). Every other column copies the value verbatim.
+            Dim valueToSet = If(IsLocationColumn(col), IncrementLocation(aboveText), aboveText)
+            grid.CurrentCell.Value = valueToSet           ' fires CellValueChanged -> dirty
+
+            ' Move down only if there is a cell below and it is empty.
+            If rowView + 1 < grid.RowCount Then
+                Dim belowVal = grid.Rows(rowView + 1).Cells(col).Value
+                Dim belowText = If(belowVal Is Nothing, "", belowVal.ToString())
+                If belowText.Length = 0 Then
+                    grid.ClearSelection()
+                    grid.CurrentCell = grid.Rows(rowView + 1).Cells(col)
+                    grid.CurrentCell.Selected = True
+                End If
+            End If
         End Sub
+
+        ''' <summary>True if the given grid column is the "Location" column.</summary>
+        Private Function IsLocationColumn(colIndex As Integer) As Boolean
+            Return colIndex >= 0 AndAlso colIndex < grid.Columns.Count AndAlso
+                   String.Equals(grid.Columns(colIndex).HeaderText, "Location", StringComparison.OrdinalIgnoreCase)
+        End Function
+
+        ''' <summary>Increment the trailing numeric portion of a location, preserving the
+        ''' prefix and the digit width (MARS177 → MARS178, A0099 → A0100). Text with no
+        ''' trailing digits is returned unchanged.</summary>
+        Private Shared Function IncrementLocation(text As String) As String
+            Dim m = Regex.Match(text, "^(.*?)(\d+)$")
+            If Not m.Success Then Return text
+            Dim n As Long
+            If Not Long.TryParse(m.Groups(2).Value, n) Then Return text
+            Return m.Groups(1).Value & (n + 1).ToString().PadLeft(m.Groups(2).Value.Length, "0"c)
+        End Function
 
         Private Sub CopyFromAbove()
             If grid.CurrentCell Is Nothing Then Return
@@ -637,11 +1023,18 @@ Namespace Forms
             grid.EndEdit()
             Dim above = grid.Rows(rowView - 1).Cells(col).Value
             grid.CurrentCell.Value = above               ' fires CellValueChanged -> dirty
+            ' Move the selection down one row, if there is one.
+            If rowView + 1 < grid.RowCount Then
+                grid.ClearSelection()
+                grid.CurrentCell = grid.Rows(rowView + 1).Cells(col)
+                grid.CurrentCell.Selected = True
+            End If
         End Sub
 
         ''' <summary>Delete the row of the current cell (after confirmation), then keep
         ''' the selection on the same position (clamped) in the same column.</summary>
         Private Sub DeleteSelectedRow()
+            If _previewing Then Return
             If ActiveTable Is Nothing Then Return
             If grid.CurrentCell Is Nothing Then Return
             grid.EndEdit()
@@ -649,11 +1042,16 @@ Namespace Forms
             Dim colIndex = grid.CurrentCell.ColumnIndex
             If rowIndex < 0 OrElse rowIndex >= bindingSrc.Count Then Return
 
-            Dim r = MessageBox.Show(Me, "Delete the selected row?", "Delete Row",
-                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question)
-            If r <> DialogResult.Yes Then Return
+            If Not ConfirmDialog.Ask(Me, "Delete Row",
+                "Delete the selected row? This action cannot be undone.",
+                okText:="Delete", cancelText:="Cancel") Then Return
 
             bindingSrc.RemoveAt(rowIndex)      ' removes the row from the bound table
+            ' RemoveAt only marks the underlying DataRow as Deleted; it stays in
+            ' table.Rows until AcceptChanges, and touching a Deleted row throws
+            ' ("Deleted row information cannot be accessed") on the next save /
+            ' normalize / report. Commit it now so no Deleted-state row lingers.
+            ActiveTable.AcceptChanges()
             MarkActiveDirty()
 
             ' Keep the selection near where the row was.
@@ -664,23 +1062,21 @@ Namespace Forms
         ' ── Normalizer ───────────────────────────────────────────────────────────
 
         Private Sub RunNormalizer()
+            If _previewing Then Return
             If _activeName Is Nothing Then Return
             Dim rs = NormalizerService.FindRuleSet(_config, _activeName)
             If rs Is Nothing Then
                 SetStatus($"No normalizer rule matches {_activeName}", Palette.TextMuted)
-                MessageBox.Show(Me,
-                    $"No normalizer rule set matches ""{_activeName}"".",
-                    "Normalize", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Normalize", $"No normalizer rule set matches ""{_activeName}"".")
                 Return
             End If
 
             grid.EndEdit()
             Dim result = NormalizerService.Apply(ActiveTable, rs)
             If result.HasMissing Then
-                MessageBox.Show(Me,
+                ConfirmDialog.Notify(Me, "Normalize",
                     "These columns referenced by the rule are missing:" & vbCrLf &
-                    String.Join(", ", result.MissingColumns),
-                    "Normalize", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    String.Join(", ", result.MissingColumns), icon:=DialogIcon.Warning)
                 Return
             End If
 
@@ -695,8 +1091,7 @@ Namespace Forms
 
         Private Sub OpenRulesEditor()
             If String.IsNullOrEmpty(_folder) Then
-                MessageBox.Show(Me, "Open a folder first.", "Rules",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Rules", "Open a folder first.", icon:=DialogIcon.Warning)
                 Return
             End If
             Dim columns As New List(Of String)()
@@ -713,8 +1108,8 @@ Namespace Forms
                         UpdateFileScopedMenus()   ' rule set may now match/unmatch this file
                         SetStatus("Rules saved to normalizer.json", Palette.Success)
                     Catch ex As Exception
-                        MessageBox.Show(Me, "Could not save rules:" & vbCrLf & ex.Message,
-                                        "Rules", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        ConfirmDialog.Notify(Me, "Rules", "Could not save rules:" & vbCrLf & ex.Message,
+                                             icon:=DialogIcon.Error)
                     End Try
                 End If
             End Using
@@ -869,8 +1264,8 @@ Namespace Forms
                 End If
                 If Not silent Then SetStatus($"Saved {name}", Palette.Success)
             Catch ex As Exception
-                MessageBox.Show(Me, $"Could not save {name}:" & vbCrLf & ex.Message,
-                                "Save failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Save failed", $"Could not save {name}:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
             End Try
         End Sub
 
@@ -950,6 +1345,18 @@ Namespace Forms
             ' so laptops without a numpad and full keyboards both work.
             Dim keyCode As Keys = keyData And Keys.KeyCode
             Dim mods As Keys = keyData And Keys.Modifiers
+
+            ' Windows-clipboard variants (Ctrl+Shift+C / Ctrl+Shift+V).
+            If mods = (Keys.Control Or Keys.Shift) Then
+                If keyCode = Keys.C Then
+                    CopyCellWindowsOnly()
+                    Return True
+                ElseIf keyCode = Keys.V Then
+                    PasteFromWindows()
+                    Return True
+                End If
+            End If
+
             If keyCode >= Keys.NumPad0 AndAlso keyCode <= Keys.NumPad9 Then
                 Dim n As Integer = CInt(keyCode) - CInt(Keys.NumPad0)
                 If mods = Keys.Control Then
@@ -985,31 +1392,45 @@ Namespace Forms
         ''' <summary>Enable/disable menu items based on current state.</summary>
         Private Sub UpdateFileScopedMenus()
             Dim hasFile = _activeName IsNot Nothing
+            ' While previewing a backup the grid is read-only — editing is disabled.
+            Dim editable = hasFile AndAlso Not _previewing
             For Each it In New ToolStripItem() {mnuSave, mnuSaveAll, mnuAddRow, mnuAddClone,
-                                                mnuCopyAbove, mnuColumns, mnuAutosize,
-                                                mnuRemove, mnuDeleteRow}
-                it.Enabled = hasFile
+                                                mnuCopyDownSafe, mnuCopyAbove, mnuColumns,
+                                                mnuUnsort, mnuRemove, mnuDeleteRow}
+                it.Enabled = editable
             Next
-            ' Normalize Description only applies when a rule set matches this file.
-            Dim canNormalize = hasFile AndAlso
+            mnuAutosize.Enabled = hasFile   ' resizing columns is fine even in a preview
+            ' Normalize Description only applies when a rule set matches this editable file.
+            Dim canNormalize = editable AndAlso
                 NormalizerService.FindRuleSet(_config, _activeName) IsNot Nothing
             mnuNormalize.Enabled = canNormalize
             ' Mirror the enable state onto the grid-toolbar icon buttons.
-            btnSave.Enabled = hasFile
-            btnSaveAll.Enabled = hasFile
+            btnSave.Enabled = editable
+            btnSaveAll.Enabled = editable
             btnAutosize.Enabled = hasFile
             btnNormalize.Enabled = canNormalize
+            btnUnsort.Enabled = editable
+            btnDeleteRow.Enabled = editable
+            ' Analysis buttons read the open documents (harmless during a preview too).
+            btnLocationAnalysis.Enabled = hasFile
+            btnIntegrityCheck.Enabled = hasFile
+            btnLocationReport.Enabled = hasFile
             ' These only need a working folder, not an open file.
             Dim hasFolder = Not String.IsNullOrEmpty(_folder)
             mnuNewLibrary.Enabled = hasFolder
             mnuOpenWorkFolder.Enabled = hasFolder
             mnuCreateArchive.Enabled = hasFolder
+            btnCreateArchive.Enabled = hasFolder
         End Sub
 
         ' ── Grid-toolbar icon buttons ────────────────────────────────────────────
 
         Private Sub btnAutosize_Click(sender As Object, e As EventArgs) Handles btnAutosize.Click
             AutoSizeColumns()
+        End Sub
+
+        Private Sub btnDeleteRow_Click(sender As Object, e As EventArgs) Handles btnDeleteRow.Click
+            DeleteSelectedRow()
         End Sub
 
         Private Sub btnNormalize_Click(sender As Object, e As EventArgs) Handles btnNormalize.Click
@@ -1024,8 +1445,51 @@ Namespace Forms
             SaveAllDirty()
         End Sub
 
+        Private Sub btnUnsort_Click(sender As Object, e As EventArgs) Handles btnUnsort.Click
+            Unsort()
+        End Sub
+
         Private Sub btnRestore_Click(sender As Object, e As EventArgs) Handles btnRestore.Click
             RestoreSelectedBackup()
+        End Sub
+
+        ' Toolbar shortcuts to the Tools/File menu features (same handlers).
+        Private Sub btnLocationAnalysis_Click(sender As Object, e As EventArgs) Handles btnLocationAnalysis.Click
+            AnalyzeLocations()
+        End Sub
+
+        Private Sub btnIntegrityCheck_Click(sender As Object, e As EventArgs) Handles btnIntegrityCheck.Click
+            IntegrityCheck()
+        End Sub
+
+        Private Sub btnLocationReport_Click(sender As Object, e As EventArgs) Handles btnLocationReport.Click
+            LocationReport()
+        End Sub
+
+        Private Sub btnCreateArchive_Click(sender As Object, e As EventArgs) Handles btnCreateArchive.Click
+            CreateArchive()
+        End Sub
+
+        ''' <summary>Last Integrity Check outcome shown on the toolbar icon.</summary>
+        Private Enum IntegrityState
+            Neutral     ' not checked / stale after an edit
+            Pass        ' green glyph — index clean
+            Failed      ' white glyph on red — duplicates found
+        End Enum
+
+        ''' <summary>Colour the Integrity Check toolbar icon to reflect the last result.</summary>
+        Private Sub SetIntegrityIcon(state As IntegrityState)
+            Select Case state
+                Case IntegrityState.Pass
+                    btnIntegrityCheck.BackColor = DarkTheme.ButtonFace
+                    btnIntegrityCheck.ForeColor = DarkTheme.IconGreen
+                Case IntegrityState.Failed
+                    btnIntegrityCheck.BackColor = DarkTheme.IconRed
+                    btnIntegrityCheck.ForeColor = Color.White
+                Case Else
+                    btnIntegrityCheck.BackColor = DarkTheme.ButtonFace
+                    btnIntegrityCheck.ForeColor = DarkTheme.IconBlue
+            End Select
         End Sub
 
         ' ── Copy / Paste (app-local clipboard, not the Windows clipboard) ───────────
@@ -1042,36 +1506,78 @@ Namespace Forms
             Return best
         End Function
 
+        ''' <summary>Ctrl+C: copy the cell to BOTH the internal clipboard and Windows.</summary>
         Private Sub CopyCell()
             Dim src = TopLeftSelectedCell()
             If src Is Nothing Then Return
-            AppInfo.OurClipboard = If(src.Value Is Nothing, "", src.Value.ToString())
+            Dim text = If(src.Value Is Nothing, "", src.Value.ToString())
+            AppInfo.OurClipboard = text
+            SetWindowsClipboard(text)
             UpdateFindReplaceStatus()
             SetStatus("Copied cell", Palette.Success)
         End Sub
 
+        ''' <summary>Ctrl+Shift+C: copy the cell to the Windows clipboard ONLY (internal untouched).</summary>
+        Private Sub CopyCellWindowsOnly()
+            Dim src = TopLeftSelectedCell()
+            If src Is Nothing Then Return
+            SetWindowsClipboard(If(src.Value Is Nothing, "", src.Value.ToString()))
+            SetStatus("Copied cell to Windows clipboard", Palette.Success)
+        End Sub
+
+        ''' <summary>Best-effort write to the Windows clipboard (empty text clears it).</summary>
+        Private Shared Sub SetWindowsClipboard(text As String)
+            Try
+                If String.IsNullOrEmpty(text) Then
+                    Clipboard.Clear()
+                Else
+                    Clipboard.SetText(text)
+                End If
+            Catch
+                ' The clipboard can be transiently locked by another app — non-fatal.
+            End Try
+        End Sub
+
+        ''' <summary>Ctrl+V: paste the internal clipboard; if it is empty, fall back to Windows.</summary>
         Private Sub PasteCell()
+            If _previewing Then Return
             If grid.CurrentCell Is Nothing Then Return
             grid.EndEdit()
 
-            ' Choose the paste value: prefer the app clipboard; if it is empty, fall
-            ' back to the Windows clipboard text (without storing it in OurClipboard —
-            ' they are separate). An empty Windows clipboard means nothing to paste.
+            ' Prefer the app clipboard; if empty, fall back to the Windows clipboard text
+            ' (without storing it in OurClipboard — they are separate).
             Dim value As String
             If Not String.IsNullOrEmpty(AppInfo.OurClipboard) Then
                 value = AppInfo.OurClipboard
             Else
-                Try
-                    value = Clipboard.GetText()
-                Catch
-                    value = ""
-                End Try
+                value = WindowsClipboardText()
                 If String.IsNullOrEmpty(value) Then Return
             End If
+            PasteValueIntoColumn(value)
+        End Sub
 
+        ''' <summary>Ctrl+Shift+V: always paste from the Windows clipboard.</summary>
+        Private Sub PasteFromWindows()
+            If _previewing Then Return
+            If grid.CurrentCell Is Nothing Then Return
+            grid.EndEdit()
+            Dim value = WindowsClipboardText()
+            If String.IsNullOrEmpty(value) Then Return
+            PasteValueIntoColumn(value)
+        End Sub
+
+        Private Shared Function WindowsClipboardText() As String
+            Try
+                Return Clipboard.GetText()
+            Catch
+                Return ""
+            End Try
+        End Function
+
+        ''' <summary>Write <paramref name="value"/> into every selected cell in the current
+        ''' column (or just the current cell); read-only cells (GUID) are skipped.</summary>
+        Private Sub PasteValueIntoColumn(value As String)
             Dim targetCol = grid.CurrentCell.ColumnIndex
-            ' Paste stays in the current column: target every selected cell in that
-            ' column (or just the current cell). Read-only cells (GUID) are skipped.
             Dim targets As New List(Of DataGridViewCell)()
             For Each c As DataGridViewCell In grid.SelectedCells
                 If c.ColumnIndex = targetCol Then targets.Add(c)
@@ -1228,6 +1734,7 @@ Namespace Forms
         ''' then overwrite the current cell with OurClipboard — always, regardless of
         ''' any match. Focus does not move; the index column is never written.</summary>
         Private Sub ReplaceCurrentCell()
+            If _previewing Then Return
             Dim cell = grid.CurrentCell
             If cell Is Nothing Then Return
             ' 1. Seed FindString from the current cell (a read — allowed anywhere).
@@ -1258,6 +1765,7 @@ Namespace Forms
         End Sub
 
         Private Sub ReplaceNextInScope(scopeColumn As Integer)
+            If _previewing Then Return
             If String.IsNullOrEmpty(AppInfo.OurClipboard) Then
                 SetStatus("Clipboard is empty — nothing to replace with", Palette.Warning)
                 Return
@@ -1294,6 +1802,7 @@ Namespace Forms
 
         Private Sub FindToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles FindToolStripMenuItem.Click
             FindPrompt()
+            FindNextInTable()
         End Sub
 
         Private Sub FindNextToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles FindNextToolStripMenuItem.Click
@@ -1302,6 +1811,7 @@ Namespace Forms
 
         Private Sub FindCellToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles FindCellToolStripMenuItem.Click
             FindCellIntoFindString()
+            FindNextInTable()
         End Sub
 
         Private Sub FindInColumnToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles FindInColumnToolStripMenuItem.Click
@@ -1335,16 +1845,16 @@ Namespace Forms
             If name.Length = 0 Then Return
 
             If name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 Then
-                MessageBox.Show(Me, "That name contains characters that aren't allowed in a file name.",
-                                "New Library", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "New Library",
+                    "That name contains characters that aren't allowed in a file name.", icon:=DialogIcon.Warning)
                 Return
             End If
 
             Dim fileName = name & ".csv"
             Dim fullPath = Path.Combine(_folder, fileName)
             If File.Exists(fullPath) Then
-                MessageBox.Show(Me, $"""{fileName}"" already exists in this folder.",
-                                "New Library", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "New Library", $"""{fileName}"" already exists in this folder.",
+                                     icon:=DialogIcon.Warning)
                 Return
             End If
 
@@ -1356,8 +1866,8 @@ Namespace Forms
             Try
                 CsvService.WriteCsv(fullPath, table)
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not create the file:" & vbCrLf & ex.Message,
-                                "New Library", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "New Library", "Could not create the file:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
                 Return
             End Try
 
@@ -1382,8 +1892,8 @@ Namespace Forms
             SaveAllDirty()
 
             If Directory.GetFiles(_folder, "*.csv").Length = 0 Then
-                MessageBox.Show(Me, "There are no CSV files in the working folder to archive.",
-                                "Create Archive", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Create Archive", "There are no CSV files in the working folder to archive.",
+                                     icon:=DialogIcon.Warning)
                 Return
             End If
 
@@ -1393,8 +1903,8 @@ Namespace Forms
                     SetStatus($"Archived to {zipName}", Palette.Success)
                 End If
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not create the archive:" & vbCrLf & ex.Message,
-                                "Create Archive", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Create Archive", "Could not create the archive:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
             End Try
         End Sub
 
@@ -1487,8 +1997,8 @@ Namespace Forms
                 File.WriteAllText(exportPath, JsonSerializer.Serialize(record, ExportJsonOpts),
                                   New UTF8Encoding(False))
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not write the export file:" & vbCrLf & ex.Message,
-                                "Export Record", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Export Record", "Could not write the export file:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
                 Return
             End Try
             SetStatus($"Exported {baseName}.EXPORT", Palette.Success)
@@ -1547,21 +2057,7 @@ Namespace Forms
                     matched.Add(kv.Key)
                 End If
             Next
-            table.Rows.Add(row)
-            MarkActiveDirty()
-
-            ' Select and scroll to the new row (best-effort).
-            Try
-                Dim viewIndex = bindingSrc.Count - 1
-                If viewIndex >= 0 Then
-                    grid.ClearSelection()
-                    Dim colIndex = If(grid.Columns.Count > 1, 1, 0)
-                    grid.CurrentCell = grid.Rows(viewIndex).Cells(colIndex)
-                    grid.FirstDisplayedScrollingRowIndex = Math.Max(0, viewIndex)
-                End If
-            Catch
-                ' Selection is best-effort.
-            End Try
+            AppendRowAndSelect(row, beginEdit:=False)
 
             Return matched
         End Function
@@ -1612,12 +2108,20 @@ Namespace Forms
             CopyFromAbove()
         End Sub
 
+        Private Sub mnuCopyDownSafe_Click(sender As Object, e As EventArgs) Handles mnuCopyDownSafe.Click
+            CopyDownSafe()
+        End Sub
+
         Private Sub mnuColumns_Click(sender As Object, e As EventArgs) Handles mnuColumns.Click
             OpenColumnManager()
         End Sub
 
         Private Sub mnuAutosize_Click(sender As Object, e As EventArgs) Handles mnuAutosize.Click
             AutoSizeColumns()
+        End Sub
+
+        Private Sub mnuUnsort_Click(sender As Object, e As EventArgs) Handles mnuUnsort.Click
+            Unsort()
         End Sub
 
         Private Sub mnuNormalize_Click(sender As Object, e As EventArgs) Handles mnuNormalize.Click
@@ -1648,13 +2152,11 @@ Namespace Forms
             grid.EndEdit()
 
             If Not table.Columns.Contains("ID") Then
-                MessageBox.Show(Me, "This table has no ""ID"" column to convert.", "Convert ID",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Convert ID", "This table has no ""ID"" column to convert.")
                 Return
             End If
             If table.Columns.Contains("Index") Then
-                MessageBox.Show(Me, "This table already has an ""Index"" column.", "Convert ID",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Convert ID", "This table already has an ""Index"" column.")
                 Return
             End If
 
@@ -1800,6 +2302,7 @@ Namespace Forms
         ''' <summary>Paste AdvancedClipboard(index, col) into the current grid cell.
         ''' The GUID/index column (and any read-only cell) is protected.</summary>
         Private Sub AdvancedClipboardPaste(col As Integer)
+            If _previewing Then Return
             If col < 0 OrElse col >= AppInfo.AdvancedClipboardCols Then Return
             If grid.CurrentCell Is Nothing Then Return
             If grid.CurrentCell.ColumnIndex = 0 OrElse grid.CurrentCell.ReadOnly Then
@@ -1838,8 +2341,8 @@ Namespace Forms
             Try
                 Process.Start(New ProcessStartInfo With {.FileName = dir, .UseShellExecute = True})
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not open the config folder:" & vbCrLf & ex.Message,
-                                "Show Config Files", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Show Config Files", "Could not open the config folder:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Warning)
             End Try
         End Sub
 
@@ -1920,8 +2423,8 @@ Namespace Forms
             Try
                 Process.Start(New ProcessStartInfo With {.FileName = url, .UseShellExecute = True})
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not open the browser:" & vbCrLf & ex.Message,
-                                "Open Website", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Open Website", "Could not open the browser:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Warning)
             End Try
         End Sub
 
@@ -1995,8 +2498,7 @@ Namespace Forms
         ''' current working folder. A single instance is kept.</summary>
         Private Sub OpenImportRecords()
             If String.IsNullOrEmpty(_folder) Then
-                MessageBox.Show(Me, "Open a working folder first.", "Import Records",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Import Records", "Open a working folder first.", icon:=DialogIcon.Warning)
                 Return
             End If
             If _importForm IsNot Nothing AndAlso Not _importForm.IsDisposed Then
@@ -2011,6 +2513,7 @@ Namespace Forms
         Private Sub QuickWebLookupToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles QuickWebLookupToolStripMenuItem.Click
             QuickWebLookup()
         End Sub
+
     End Class
 
 End Namespace

@@ -30,17 +30,18 @@ Namespace Forms
             'pnlContent
             '
             Me.pnlContent.AutoScroll = True
+            Me.pnlContent.BackColor = System.Drawing.Color.FromArgb(45, 45, 48)
             Me.pnlContent.FlowDirection = System.Windows.Forms.FlowDirection.TopDown
             Me.pnlContent.Location = New System.Drawing.Point(0, 8)
             Me.pnlContent.Name = "pnlContent"
             Me.pnlContent.Padding = New System.Windows.Forms.Padding(16, 4, 16, 4)
-            Me.pnlContent.Size = New System.Drawing.Size(500, 504)
+            Me.pnlContent.Size = New System.Drawing.Size(1000, 560)
             Me.pnlContent.TabIndex = 1
             Me.pnlContent.WrapContents = False
             '
             'btnClose
             '
-            Me.btnClose.Location = New System.Drawing.Point(396, 520)
+            Me.btnClose.Location = New System.Drawing.Point(898, 578)
             Me.btnClose.Name = "btnClose"
             Me.btnClose.Size = New System.Drawing.Size(90, 28)
             Me.btnClose.TabIndex = 2
@@ -50,7 +51,9 @@ Namespace Forms
             '
             Me.AcceptButton = Me.btnClose
             Me.CancelButton = Me.btnClose
-            Me.ClientSize = New System.Drawing.Size(500, 560)
+            Me.BackColor = System.Drawing.Color.FromArgb(45, 45, 48)
+            Me.ForeColor = System.Drawing.Color.FromArgb(220, 220, 220)
+            Me.ClientSize = New System.Drawing.Size(1000, 620)
             Me.Controls.Add(Me.pnlContent)
             Me.Controls.Add(Me.btnClose)
             Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog

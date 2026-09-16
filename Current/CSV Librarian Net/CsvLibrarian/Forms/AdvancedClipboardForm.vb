@@ -1,5 +1,7 @@
+Imports System.Drawing
 Imports System.Windows.Forms
 Imports CsvLibrarian.Services
+Imports CsvLibrarian.Theme
 
 Namespace Forms
 
@@ -17,6 +19,7 @@ Namespace Forms
         ''' <summary>Parameterless constructor for the Windows Forms designer.</summary>
         Public Sub New()
             InitializeComponent()
+            StyleDark()
             _settings = New AppSettings()
             BuildGrid()
             LoadFromGlobal()
@@ -24,9 +27,21 @@ Namespace Forms
 
         Public Sub New(settings As AppSettings)
             InitializeComponent()
+            StyleDark()
             _settings = settings
             BuildGrid()
             LoadFromGlobal()
+        End Sub
+
+        ''' <summary>Flat dark buttons and a dark grid (two-grey rows, dark headers).</summary>
+        Private Sub StyleDark()
+            DarkTheme.StyleFlatButtons(closeBtn, cancelBtn)
+            DarkTheme.StyleGrid(clipGrid)
+            clipGrid.ColumnHeadersDefaultCellStyle.Font = New Font("Segoe UI", 9.0F, FontStyle.Bold)
+            ' Row headers show the 0–9 row labels — match the column-header band.
+            clipGrid.RowHeadersDefaultCellStyle.BackColor = DarkTheme.Band
+            clipGrid.RowHeadersDefaultCellStyle.ForeColor = DarkTheme.TextNormal
+            clipGrid.RowHeadersDefaultCellStyle.SelectionBackColor = DarkTheme.Band
         End Sub
 
         ''' <summary>Create the fixed 10×10 grid (columns + rows), 1-based headers.</summary>
@@ -75,8 +90,8 @@ Namespace Forms
                 _settings.AdvancedClipboard = AppInfo.AdvancedClipboardToJagged()
                 _settings.Save()
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not save the advanced clipboard:" & vbCrLf & ex.Message,
-                                "Advanced Clipboard", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Advanced Clipboard",
+                    "Could not save the advanced clipboard:" & vbCrLf & ex.Message, icon:=DialogIcon.Error)
                 Return   ' keep the window open so nothing is lost
             End Try
             Me.DialogResult = DialogResult.OK

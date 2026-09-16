@@ -1,6 +1,7 @@
 Imports System.Data
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports CsvLibrarian.Theme
 Imports VbInteraction = Microsoft.VisualBasic.Interaction
 
 Namespace Forms
@@ -54,15 +55,22 @@ Namespace Forms
         ''' <summary>Parameterless constructor for the Windows Forms designer.</summary>
         Public Sub New()
             InitializeComponent()
+            StyleDark()
         End Sub
 
         Public Sub New(source As DataTable)
             InitializeComponent()
+            StyleDark()
             _work = source.Copy()          ' deep copy: schema + data (Migrate edits this)
             For Each c As DataColumn In source.Columns
                 _entries.Add(New ColEntry With {.Name = c.ColumnName, .OriginalName = c.ColumnName})
             Next
             RefreshList(0)
+        End Sub
+
+        ''' <summary>Flat dark buttons (visual-styled buttons ignore BackColor).</summary>
+        Private Sub StyleDark()
+            DarkTheme.StyleFlatButtons(btnAdd, btnRename, btnDelete, btnUp, btnDown, btnOk, btnCancel, btnMigrate)
         End Sub
 
         Private Sub RefreshList(selectIndex As Integer)
@@ -111,11 +119,11 @@ Namespace Forms
             Dim backColor As Color
             Dim foreColor As Color
             If selected Then
-                backColor = SystemColors.Highlight
-                foreColor = SystemColors.HighlightText
+                backColor = Color.FromArgb(61, 92, 135)      ' active-cell blue
+                foreColor = Color.White
             ElseIf isLocked Then
-                backColor = Color.FromArgb(235, 235, 235)   ' light grey
-                foreColor = Color.FromArgb(90, 90, 90)       ' dark grey
+                backColor = Color.FromArgb(60, 60, 64)       ' darker grey (locked)
+                foreColor = Color.FromArgb(150, 150, 155)    ' muted
             Else
                 backColor = lstColumns.BackColor
                 foreColor = lstColumns.ForeColor
@@ -127,7 +135,7 @@ Namespace Forms
 
             ' Divider line at the top of the first movable field.
             If _lockedCount > 0 AndAlso _lockedCount < _entries.Count AndAlso e.Index = _lockedCount Then
-                Using p As New Pen(Color.Gray)
+                Using p As New Pen(Color.FromArgb(80, 80, 85))
                     e.Graphics.DrawLine(p, e.Bounds.Left, e.Bounds.Top, e.Bounds.Right - 1, e.Bounds.Top)
                 End Using
             End If
@@ -158,8 +166,7 @@ Namespace Forms
             Dim name = PromptName("Add Column", "")
             If name.Length = 0 Then Return
             If NameExists(name, -1) Then
-                MessageBox.Show(Me, "A column with that name already exists.", "Add Column",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Add Column", "A column with that name already exists.", icon:=DialogIcon.Warning)
                 Return
             End If
             _entries.Add(New ColEntry With {.Name = name, .OriginalName = Nothing})
@@ -175,8 +182,7 @@ Namespace Forms
             If name.Length = 0 Then Return
             If String.Equals(name, _entries(idx).Name, StringComparison.Ordinal) Then Return
             If NameExists(name, idx) Then
-                MessageBox.Show(Me, "A column with that name already exists.", "Rename Column",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Rename Column", "A column with that name already exists.", icon:=DialogIcon.Warning)
                 Return
             End If
             _entries(idx).Name = name
@@ -188,10 +194,9 @@ Namespace Forms
             Dim idx = lstColumns.SelectedIndex
             If idx <= 0 Then Return                      ' never the GUID column
             If IsProtected(_entries(idx).Name) Then Return  ' standard field — locked
-            Dim r = MessageBox.Show(Me,
+            If Not ConfirmDialog.Ask(Me, "Delete Column",
                 $"Delete column ""{_entries(idx).Name}"" and its data?",
-                "Delete Column", MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
-            If r <> DialogResult.Yes Then Return
+                okText:="Delete", cancelText:="Cancel", icon:=DialogIcon.Warning) Then Return
             _entries.RemoveAt(idx)
             _changed = True
             RefreshList(idx - 1)
@@ -263,18 +268,15 @@ Namespace Forms
 
             Dim tgtEntry = EntryForName(targetName)
             If tgtEntry Is Nothing Then
-                MessageBox.Show(Me, $"There is no column named ""{targetName}"".", "Migrate",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Migrate", $"There is no column named ""{targetName}"".", icon:=DialogIcon.Warning)
                 Return
             End If
             If tgtEntry Is srcEntry Then
-                MessageBox.Show(Me, "The source and target columns are the same.", "Migrate",
-                                MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Migrate", "The source and target columns are the same.")
                 Return
             End If
             If _entries.IndexOf(tgtEntry) = 0 Then
-                MessageBox.Show(Me, "The GUID/Index column can't be a migration target.", "Migrate",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Migrate", "The GUID/Index column can't be a migration target.", icon:=DialogIcon.Warning)
                 Return
             End If
 
@@ -283,10 +285,9 @@ Namespace Forms
             Dim tgtCol = tgtEntry.OriginalName
             If srcCol Is Nothing OrElse tgtCol Is Nothing OrElse
                Not _work.Columns.Contains(srcCol) OrElse Not _work.Columns.Contains(tgtCol) Then
-                MessageBox.Show(Me,
+                ConfirmDialog.Notify(Me, "Migrate",
                     "Migration works on existing columns with data. A newly added column has no " &
-                    "data yet — click OK to apply your column changes first, then reopen Manage Columns.",
-                    "Migrate", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    "data yet — click OK to apply your column changes first, then reopen Manage Columns.")
                 Return
             End If
 
@@ -320,9 +321,8 @@ Namespace Forms
             Next
 
             If n > 0 Then _changed = True
-            MessageBox.Show(Me,
-                $"Migrated ""{srcEntry.Name}"" → ""{tgtEntry.Name}"" ({mode}): {n} row(s) updated.",
-                "Migrate", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            ConfirmDialog.Notify(Me, "Migrate",
+                $"Migrated ""{srcEntry.Name}"" → ""{tgtEntry.Name}"" ({mode}): {n} row(s) updated.")
         End Sub
 
         ' ── Event handlers ─────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ Imports System.Text
 Imports System.Text.Encodings.Web
 Imports System.Text.Json
 Imports System.Windows.Forms
+Imports CsvLibrarian.Theme
 
 Namespace Forms
 
@@ -37,39 +38,44 @@ Namespace Forms
         ''' <summary>Parameterless constructor for the Windows Forms designer.</summary>
         Public Sub New()
             InitializeComponent()
+            StyleDark()
             _folder = ""
             StyleGrid()
         End Sub
 
         Public Sub New(folder As String)
             InitializeComponent()
+            StyleDark()
             _folder = folder
             StyleGrid()
             RefreshFileList()
             UpdateButtons()
         End Sub
 
-        ''' <summary>Mirror the main grid: white/light-grey rows, dark-grey monospaced
-        ''' text, medium-grey bold header, greyed read-only first column.</summary>
+        ''' <summary>Dark grid: light monospaced text on two shades of grey; dark bold
+        ''' header (navy border); muted read-only Field column; blue selection.</summary>
         Private Sub StyleGrid()
-            fileGrid.BackgroundColor = Color.White
-            fileGrid.DefaultCellStyle.BackColor = Color.White
-            fileGrid.DefaultCellStyle.ForeColor = Color.FromArgb(60, 60, 60)
+            DarkTheme.StyleGrid(fileGrid)
             fileGrid.DefaultCellStyle.Font = New Font("Consolas", 9.5F)
             fileGrid.DefaultCellStyle.Padding = New Padding(3, 0, 3, 0)
-            fileGrid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245)
-            fileGrid.EnableHeadersVisualStyles = False
-            fileGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(190, 190, 190)
-            fileGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black
-            fileGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(190, 190, 190)
             fileGrid.ColumnHeadersDefaultCellStyle.Font = New Font("Consolas", 9.0F, FontStyle.Bold)
             fileGrid.ColumnHeadersDefaultCellStyle.Padding = New Padding(8, 4, 4, 4)
             fileGrid.RowTemplate.Height = 24
-            ' First column: greyed, like the main GUID column.
-            colField.DefaultCellStyle.BackColor = SystemColors.Control
-            colField.DefaultCellStyle.ForeColor = SystemColors.GrayText
+            ' Field column: darker, muted — like the main GUID column.
+            colField.DefaultCellStyle.BackColor = Color.FromArgb(42, 42, 46)
+            colField.DefaultCellStyle.ForeColor = DarkTheme.TextMuted
             ' Never copy to the Windows clipboard (and the grid is read-only anyway).
             fileGrid.ClipboardCopyMode = DataGridViewClipboardCopyMode.Disable
+        End Sub
+
+        ''' <summary>Dark form, list, and flat dark buttons.</summary>
+        Private Sub StyleDark()
+            Me.BackColor = DarkTheme.FormBackground
+            Me.ForeColor = DarkTheme.TextNormal
+            lstFiles.BackColor = DarkTheme.RowPrimary
+            lstFiles.ForeColor = DarkTheme.TextNormal
+            lstFiles.BorderStyle = BorderStyle.FixedSingle
+            DarkTheme.StyleFlatButtons(btnClose, btnImport, btnDelete)
         End Sub
 
         ''' <summary>Public hook so the main window can refresh the list after an
@@ -142,18 +148,20 @@ Namespace Forms
             ApplyImportedState(imported)
         End Sub
 
-        ''' <summary>Already-imported files show a 25% grey grid with Import disabled;
-        ''' otherwise the normal styling is restored.</summary>
+        ''' <summary>Already-imported files show a muted grey grid with Import disabled;
+        ''' otherwise the normal (dark) styling is restored.</summary>
         Private Sub ApplyImportedState(imported As Boolean)
             If imported Then
-                Dim g = Color.FromArgb(191, 191, 191)   ' 25% grey (25% black over white)
+                Dim g = Color.FromArgb(70, 70, 74)      ' muted "disabled" grey
+                Dim fg = Color.FromArgb(150, 150, 155)
                 fileGrid.DefaultCellStyle.BackColor = g
+                fileGrid.DefaultCellStyle.ForeColor = fg
                 fileGrid.AlternatingRowsDefaultCellStyle.BackColor = g
                 fileGrid.ColumnHeadersDefaultCellStyle.BackColor = g
                 colField.DefaultCellStyle.BackColor = g
                 btnImport.Enabled = False
             Else
-                StyleGrid()   ' restore the normal colours
+                StyleGrid()   ' restore the normal (dark) colours
                 btnImport.Enabled = lstFiles.SelectedIndex >= 0
             End If
         End Sub
@@ -195,11 +203,11 @@ Namespace Forms
 
             Dim backColor As Color, foreColor As Color
             If selected Then
-                backColor = SystemColors.Highlight
-                foreColor = SystemColors.HighlightText
+                backColor = Color.FromArgb(61, 92, 135)
+                foreColor = Color.White
             ElseIf imported Then
-                backColor = Color.FromArgb(210, 210, 210)   ' grey background cue
-                foreColor = lstFiles.ForeColor
+                backColor = Color.FromArgb(70, 70, 74)      ' grey background cue
+                foreColor = Color.FromArgb(157, 157, 160)
             Else
                 backColor = lstFiles.BackColor
                 foreColor = lstFiles.ForeColor
@@ -237,15 +245,14 @@ Namespace Forms
             Dim idx = lstFiles.SelectedIndex
             If idx < 0 OrElse idx >= _files.Count Then Return
             Dim filePath = _files(idx)
-            Dim r = MessageBox.Show(Me,
+            If Not ConfirmDialog.Ask(Me, "Delete Export File",
                 $"Delete ""{Path.GetFileName(filePath)}"" from disk? This cannot be undone.",
-                "Delete Export File", MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
-            If r <> DialogResult.Yes Then Return
+                okText:="Delete", cancelText:="Cancel", icon:=DialogIcon.Warning) Then Return
             Try
                 File.Delete(filePath)
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not delete the file:" & vbCrLf & ex.Message,
-                                "Delete Export File", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Delete Export File", "Could not delete the file:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
                 Return
             End Try
             fileGrid.Rows.Clear()
@@ -272,8 +279,7 @@ Namespace Forms
             If main Is Nothing Then Return
             Dim matched = main.ImportRecordIntoGrid(record)
             If matched Is Nothing Then
-                MessageBox.Show(Me, "Open a CSV file in the main window before importing.",
-                                "Import Records", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                ConfirmDialog.Notify(Me, "Import Records", "Open a CSV file in the main window before importing.")
                 Return
             End If
 
@@ -282,7 +288,8 @@ Namespace Forms
             For Each row As DataGridViewRow In fileGrid.Rows
                 Dim field = Convert.ToString(row.Cells(colField.Index).Value)
                 If matchedSet.Contains(field) Then
-                    row.Cells(colData.Index).Style.BackColor = Color.LightGreen
+                    row.Cells(colData.Index).Style.BackColor = Color.FromArgb(46, 110, 60)   ' matched (dark green)
+                    row.Cells(colData.Index).Style.ForeColor = Color.White
                 End If
             Next
 
@@ -290,9 +297,9 @@ Namespace Forms
             Try
                 MarkFileImported(filePath)
             Catch ex As Exception
-                MessageBox.Show(Me, "The record was imported, but the file could not be marked:" &
-                                vbCrLf & ex.Message,
-                                "Import Records", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                ConfirmDialog.Notify(Me, "Import Records",
+                    "The record was imported, but the file could not be marked:" & vbCrLf & ex.Message,
+                    icon:=DialogIcon.Warning)
             End Try
             btnImport.Enabled = False
 

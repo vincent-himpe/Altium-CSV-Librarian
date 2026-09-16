@@ -57,6 +57,9 @@ Namespace Forms
             '
             'lstColumns
             '
+            Me.lstColumns.BackColor = System.Drawing.Color.FromArgb(51, 51, 55)
+            Me.lstColumns.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle
+            Me.lstColumns.ForeColor = System.Drawing.Color.FromArgb(220, 220, 220)
             Me.lstColumns.DrawMode = System.Windows.Forms.DrawMode.OwnerDrawFixed
             Me.lstColumns.IntegralHeight = False
             Me.lstColumns.ItemHeight = 18
@@ -134,6 +137,7 @@ Namespace Forms
             Me.grpMigrate.Controls.Add(Me.rbReplace)
             Me.grpMigrate.Controls.Add(Me.rbCombine)
             Me.grpMigrate.Controls.Add(Me.btnMigrate)
+            Me.grpMigrate.ForeColor = System.Drawing.Color.FromArgb(220, 220, 220)
             Me.grpMigrate.Location = New System.Drawing.Point(16, 360)
             Me.grpMigrate.Name = "grpMigrate"
             Me.grpMigrate.Size = New System.Drawing.Size(436, 66)
@@ -182,6 +186,8 @@ Namespace Forms
             '
             Me.AcceptButton = Me.btnOk
             Me.CancelButton = Me.btnCancel
+            Me.BackColor = System.Drawing.Color.FromArgb(45, 45, 48)
+            Me.ForeColor = System.Drawing.Color.FromArgb(220, 220, 220)
             Me.ClientSize = New System.Drawing.Size(460, 470)
             Me.Controls.Add(Me.grpMigrate)
             Me.Controls.Add(Me.lblHeading)

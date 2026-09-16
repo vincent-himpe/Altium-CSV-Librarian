@@ -209,6 +209,8 @@ Namespace Forms
             '
             AcceptButton = okBtn
             CancelButton = cancelBtn
+            BackColor = Color.FromArgb(45, 45, 48)
+            ForeColor = Color.FromArgb(220, 220, 220)
             ClientSize = New Size(380, 398)
             Controls.Add(grpDigikey)
             Controls.Add(grpMouser)

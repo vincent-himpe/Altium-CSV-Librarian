@@ -89,6 +89,7 @@ Namespace Services
 
             ' Data rows.
             For Each row As DataRow In table.Rows
+                If row.RowState = DataRowState.Deleted Then Continue For   ' skip pending-delete rows
                 Dim cells As New List(Of String)()
                 For Each col As DataColumn In table.Columns
                     Dim value As String = If(row(col) Is DBNull.Value, "", Convert.ToString(row(col)))

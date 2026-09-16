@@ -1,5 +1,7 @@
+Imports System.Drawing
 Imports System.Windows.Forms
 Imports CsvLibrarian.Services
+Imports CsvLibrarian.Theme
 
 Namespace Forms
 
@@ -7,7 +9,7 @@ Namespace Forms
     ''' Editor for per-supplier API credentials (Digikey, Mouser, LCSC, TME), stored in
     ''' <see cref="AppSettings.SupplierApi"/> in the settings JSON. OK writes the values
     ''' back into the shared settings object and saves; Cancel leaves them unchanged.
-    ''' Fixed-size dialog, standard Windows colour scheme.
+    ''' Fixed-size dialog, dark colour scheme.
     ''' </summary>
     Public Class SupplierApiForm
 
@@ -16,11 +18,13 @@ Namespace Forms
         ''' <summary>Parameterless constructor for the Windows Forms designer.</summary>
         Public Sub New()
             InitializeComponent()
+            StyleDark()
             _settings = New AppSettings()
         End Sub
 
         Public Sub New(settings As AppSettings)
             InitializeComponent()
+            StyleDark()
             _settings = settings
             If _settings.SupplierApi Is Nothing Then _settings.SupplierApi = New SupplierApiSettings()
 
@@ -31,6 +35,20 @@ Namespace Forms
             txtLcscApiKey.Text = If(api.LcscApiKey, "")
             txtLcscApiSecret.Text = If(api.LcscApiSecret, "")
             txtTmeApiToken.Text = If(api.TmeApiToken, "")
+        End Sub
+
+        ''' <summary>Dark group captions + text fields + flat dark buttons.</summary>
+        Private Sub StyleDark()
+            For Each g As GroupBox In {grpDigikey, grpMouser, grpLcsc, grpTme}
+                g.ForeColor = DarkTheme.TextNormal
+            Next
+            For Each t As TextBox In {txtDigikeyClientId, txtDigikeyAccessToken, txtMouserApiKey,
+                                      txtLcscApiKey, txtLcscApiSecret, txtTmeApiToken}
+                t.BackColor = DarkTheme.RowPrimary
+                t.ForeColor = DarkTheme.TextNormal
+                t.BorderStyle = BorderStyle.FixedSingle
+            Next
+            DarkTheme.StyleFlatButtons(okBtn, cancelBtn)
         End Sub
 
         Private Sub okBtn_Click(sender As Object, e As EventArgs) Handles okBtn.Click
@@ -45,8 +63,8 @@ Namespace Forms
             Try
                 _settings.Save()
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not save the API settings:" & vbCrLf & ex.Message,
-                                "Supplier API Integration", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "Supplier API Integration",
+                    "Could not save the API settings:" & vbCrLf & ex.Message, icon:=DialogIcon.Error)
                 Return   ' keep the window open
             End Try
 

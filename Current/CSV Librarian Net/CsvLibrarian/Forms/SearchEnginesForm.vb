@@ -1,7 +1,9 @@
+Imports System.Drawing
 Imports System.Linq
 Imports System.Windows.Forms
 Imports CsvLibrarian.Models
 Imports CsvLibrarian.Services
+Imports CsvLibrarian.Theme
 
 Namespace Forms
 
@@ -9,13 +11,21 @@ Namespace Forms
     ''' WebCrawler configuration window: a table of search engines (Website, Query,
     ''' Enabled, QuickLook) persisted to "Altium CSV Librarian WebConfig.JSON". OK saves and
     ''' closes; Cancel closes without saving. Rows whose Website is blank are
-    ''' discarded on save. Uses the standard Windows colour scheme (no theming).
+    ''' discarded on save. Dark colour scheme.
     ''' </summary>
     Public Class SearchEnginesForm
 
         Public Sub New()
             InitializeComponent()
+            StyleDark()
             LoadIntoGrid()
+        End Sub
+
+        ''' <summary>Flat dark buttons and a dark grid (two-grey rows, blue selection).</summary>
+        Private Sub StyleDark()
+            DarkTheme.StyleFlatButtons(btnAddRow, btnRemoveRow, okBtn, cancelBtn)
+            DarkTheme.StyleGrid(engineGrid)
+            engineGrid.ColumnHeadersDefaultCellStyle.Font = New Font("Segoe UI", 9.0F, FontStyle.Bold)
         End Sub
 
         ''' <summary>Populate the grid from the saved config.</summary>
@@ -88,8 +98,8 @@ Namespace Forms
             Try
                 WebConfigStore.Save(BuildConfig())
             Catch ex As Exception
-                MessageBox.Show(Me, "Could not save the web config:" & vbCrLf & ex.Message,
-                                "WebCrawler", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                ConfirmDialog.Notify(Me, "WebCrawler", "Could not save the web config:" & vbCrLf & ex.Message,
+                                     icon:=DialogIcon.Error)
                 Return   ' keep the window open so nothing is lost
             End Try
             Me.DialogResult = DialogResult.OK   ' closes the modal dialog

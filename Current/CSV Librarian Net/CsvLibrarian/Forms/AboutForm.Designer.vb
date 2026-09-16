@@ -54,6 +54,8 @@ Namespace Forms
             '
             Me.AcceptButton = Me.btnOk
             Me.CancelButton = Me.btnOk
+            Me.BackColor = System.Drawing.Color.FromArgb(45, 45, 48)
+            Me.ForeColor = System.Drawing.Color.FromArgb(220, 220, 220)
             Me.ClientSize = New System.Drawing.Size(400, 258)
             Me.Controls.Add(Me.lblAppTitle)
             Me.Controls.Add(Me.lblAbout)

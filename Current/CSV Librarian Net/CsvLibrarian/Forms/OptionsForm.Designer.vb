@@ -39,6 +39,9 @@ Namespace Forms
             '
             ' txtAutosave
             '
+            txtAutosave.BackColor = Color.FromArgb(51, 51, 55)
+            txtAutosave.BorderStyle = BorderStyle.FixedSingle
+            txtAutosave.ForeColor = Color.FromArgb(220, 220, 220)
             txtAutosave.Location = New Point(150, 18)
             txtAutosave.Name = "txtAutosave"
             txtAutosave.Size = New Size(80, 23)
@@ -103,6 +106,8 @@ Namespace Forms
             '
             AcceptButton = okBtn
             CancelButton = cancelBtn
+            BackColor = Color.FromArgb(45, 45, 48)
+            ForeColor = Color.FromArgb(220, 220, 220)
             ClientSize = New Size(382, 214)
             Controls.Add(lblAutosave)
             Controls.Add(txtAutosave)

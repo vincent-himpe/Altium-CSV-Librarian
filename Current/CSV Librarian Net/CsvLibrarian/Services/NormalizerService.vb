@@ -78,6 +78,7 @@ Namespace Services
             If result.HasMissing Then Return result
 
             For Each row As DataRow In table.Rows
+                If row.RowState = DataRowState.Deleted Then Continue For   ' a pending-delete row can't be read/written
                 ' 1. Per-column transforms.
                 For Each norm In ruleSet.Normalizations
                     Dim col As String = norm.Column
@@ -128,6 +129,8 @@ Namespace Services
         End Function
 
         Private Function CellText(row As DataRow, col As String) As String
+            ' A Deleted/Detached row has no accessible field data (row.Table may be Nothing).
+            If row.RowState = DataRowState.Deleted OrElse row.RowState = DataRowState.Detached Then Return ""
             If Not row.Table.Columns.Contains(col) Then Return ""
             Dim v As Object = row(col)
             If v Is DBNull.Value Then Return ""

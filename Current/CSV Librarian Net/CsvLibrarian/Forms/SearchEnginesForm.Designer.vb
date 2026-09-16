@@ -122,6 +122,8 @@ Namespace Forms
             ' SearchEnginesForm
             '
             CancelButton = cancelBtn
+            BackColor = Color.FromArgb(45, 45, 48)
+            ForeColor = Color.FromArgb(220, 220, 220)
             ClientSize = New Size(720, 456)
             Controls.Add(hintLbl)
             Controls.Add(engineGrid)

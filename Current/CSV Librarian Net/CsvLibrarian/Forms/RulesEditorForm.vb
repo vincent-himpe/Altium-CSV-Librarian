@@ -79,10 +79,9 @@ Namespace Forms
                 Return
             End If
 
-            Dim r = MessageBox.Show(Me,
+            If ConfirmDialog.Ask(Me, "Normalizer Rules",
                 $"No normalizer rule set matches ""{_activeFile}"".{vbCrLf}Create one now?",
-                "Normalizer Rules", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
-            If r = DialogResult.Yes Then
+                okText:="Create", cancelText:="Cancel") Then
                 AddRuleSet()   ' creates a set matching the active file, selects & loads it
             End If
         End Sub
@@ -105,30 +104,43 @@ Namespace Forms
                 Where(Function(n) shown.Contains(n.Column)).ToList()
         End Sub
 
-        ''' <summary>
-        ''' Standard Windows colour scheme everywhere, except the label text colours,
-        ''' which are kept as before. The divider gets a visible standard colour.
-        ''' </summary>
+        ''' <summary>Apply the dark colour scheme to the whole form.</summary>
         Private Sub ApplyLabelColors()
+            Dim light = Color.FromArgb(220, 220, 220)
+            Dim muted = Color.FromArgb(157, 157, 160)
+
+            Me.BackColor = Color.FromArgb(45, 45, 48)
+            Me.ForeColor = light
+
             rsHeading.ForeColor = Palette.Accent
-            matchLbl.ForeColor = Palette.TextMuted
-            nzLbl.ForeColor = Palette.TextMuted
-            nzHint.ForeColor = Palette.TextDim
-            tgtLbl.ForeColor = Palette.TextMuted
-            srcLbl.ForeColor = Palette.TextMuted
-            sepLbl.ForeColor = Palette.TextMuted
-            srcHint.ForeColor = Palette.TextDim
-            buildLine.BackColor = SystemColors.ControlDark
+            matchLbl.ForeColor = light
+            nzLbl.ForeColor = light
+            nzHint.ForeColor = muted
+            tgtLbl.ForeColor = light
+            srcLbl.ForeColor = light
+            sepLbl.ForeColor = light
+            srcHint.ForeColor = muted
+            buildEnable.ForeColor = light
+            skipEmptyChk.ForeColor = light
+            buildLine.BackColor = Color.FromArgb(62, 62, 66)
 
-            ' Header row: medium grey background, bold black text.
-            nzGrid.EnableHeadersVisualStyles = False
-            nzGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(190, 190, 190)
-            nzGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.Black
-            nzGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(190, 190, 190)
-            nzGrid.ColumnHeadersDefaultCellStyle.Font = New Font(nzGrid.Font, FontStyle.Bold)
+            For Each t As TextBox In {matchBox, targetBox, sourcesBox, sepBox}
+                t.BackColor = Color.FromArgb(51, 51, 55)
+                t.ForeColor = light
+                t.BorderStyle = BorderStyle.FixedSingle
+            Next
 
-            ' Owner-draw the rule list so non-active rule sets show greyed (disabled).
+            ' Rule list (owner-drawn; selection colours handled in ruleList_DrawItem).
             ruleList.DrawMode = DrawMode.OwnerDrawFixed
+            ruleList.BackColor = Color.FromArgb(51, 51, 55)
+            ruleList.ForeColor = light
+            ruleList.BorderStyle = BorderStyle.FixedSingle
+
+            DarkTheme.StyleFlatButtons(addRuleBtn, delRuleBtn, okBtn, cancelBtn)
+
+            ' Transforms grid — dark (two-grey rows, dark header, navy gridlines).
+            DarkTheme.StyleGrid(nzGrid)
+            nzGrid.ColumnHeadersDefaultCellStyle.Font = New Font(nzGrid.Font, FontStyle.Bold)
         End Sub
 
         ''' <summary>Selection is locked to the active file's rule set when one is known.</summary>
@@ -154,11 +166,11 @@ Namespace Forms
 
             Dim backColor As Color, foreColor As Color
             If selected AndAlso Not locked Then
-                backColor = SystemColors.Highlight
-                foreColor = SystemColors.HighlightText
+                backColor = Color.FromArgb(61, 92, 135)
+                foreColor = Color.White
             ElseIf locked Then
                 backColor = ruleList.BackColor
-                foreColor = SystemColors.GrayText
+                foreColor = Color.FromArgb(120, 120, 124)
             Else
                 backColor = ruleList.BackColor
                 foreColor = ruleList.ForeColor

@@ -50,10 +50,12 @@ Namespace Forms
             ToolStripMenuItem3 = New ToolStripSeparator()
             mnuAddRow = New ToolStripMenuItem()
             mnuAddClone = New ToolStripMenuItem()
+            mnuCopyDownSafe = New ToolStripMenuItem()
             mnuCopyAbove = New ToolStripMenuItem()
             sepEdit1 = New ToolStripSeparator()
             mnuColumns = New ToolStripMenuItem()
             mnuAutosize = New ToolStripMenuItem()
+            mnuUnsort = New ToolStripMenuItem()
             sepEdit2 = New ToolStripSeparator()
             mnuNormalize = New ToolStripMenuItem()
             sepEdit3 = New ToolStripSeparator()
@@ -67,6 +69,11 @@ Namespace Forms
             QuickWebLookupToolStripMenuItem = New ToolStripMenuItem()
             ExportRowToolStripMenuItem = New ToolStripMenuItem()
             ImportRecordsToolStripMenuItem = New ToolStripMenuItem()
+            LocationAnalysisToolStripMenuItem = New ToolStripMenuItem()
+            IntegrityCheckToolStripMenuItem = New ToolStripMenuItem()
+            LocationReportToolStripMenuItem = New ToolStripMenuItem()
+            CollatedBomToolStripMenuItem = New ToolStripMenuItem()
+            FindLocationToolStripMenuItem = New ToolStripMenuItem()
             mnuSettings = New ToolStripMenuItem()
             mnuRules = New ToolStripMenuItem()
             mnuWebCrawler = New ToolStripMenuItem()
@@ -109,7 +116,7 @@ Namespace Forms
             rowCountStatus = New ToolStripStatusLabel()
             saveStatus = New ToolStripStatusLabel()
             split = New SplitContainer()
-            grpLibraries = New GroupBox()
+            lblLibraries = New Label()
             fileList = New ListBox()
             grid = New DataGridView()
             emptyPanel = New Panel()
@@ -127,6 +134,16 @@ Namespace Forms
             btnNormalize = New Button()
             btnSave = New Button()
             btnSaveAll = New Button()
+            btnUnsort = New Button()
+            btnDeleteRow = New Button()
+            sepTools1 = New Panel()
+            btnLocationAnalysis = New Button()
+            btnIntegrityCheck = New Button()
+            sepTools2 = New Panel()
+            btnLocationReport = New Button()
+            sepTools3 = New Panel()
+            btnCreateArchive = New Button()
+            sepBackup = New Panel()
             bindingSrc = New BindingSource(components)
             autosaveTimer = New Timer(components)
             menuStrip.SuspendLayout()
@@ -135,7 +152,6 @@ Namespace Forms
             split.Panel1.SuspendLayout()
             split.Panel2.SuspendLayout()
             split.SuspendLayout()
-            grpLibraries.SuspendLayout()
             CType(grid, ComponentModel.ISupportInitialize).BeginInit()
             emptyPanel.SuspendLayout()
             gridToolbar.SuspendLayout()
@@ -146,9 +162,12 @@ Namespace Forms
             ' 
             ' menuStrip
             ' 
+            menuStrip.BackColor = Color.FromArgb(CByte(45), CByte(45), CByte(48))
+            menuStrip.ForeColor = Color.FromArgb(CByte(220), CByte(220), CByte(220))
             menuStrip.Items.AddRange(New ToolStripItem() {mnuFile, mnuEdit, mnuHelp, ToolsToolStripMenuItem, mnuSettings})
             menuStrip.Location = New Point(0, 0)
             menuStrip.Name = "menuStrip"
+            menuStrip.RenderMode = ToolStripRenderMode.ManagerRenderMode
             menuStrip.Size = New Size(1280, 24)
             menuStrip.TabIndex = 0
             ' 
@@ -177,7 +196,6 @@ Namespace Forms
             ' 
             mnuOpenWorkFolder.Enabled = False
             mnuOpenWorkFolder.Name = "mnuOpenWorkFolder"
-            mnuOpenWorkFolder.ShortcutKeys = Keys.Control Or Keys.L
             mnuOpenWorkFolder.Size = New Size(227, 22)
             mnuOpenWorkFolder.Text = "Open &Working Folder"
             ' 
@@ -240,7 +258,7 @@ Namespace Forms
             ' 
             ' mnuEdit
             ' 
-            mnuEdit.DropDownItems.AddRange(New ToolStripItem() {CopyToolStripMenuItem, PasteToolStripMenuItem, sepEditDel, mnuDeleteRow, ToolStripMenuItem1, FindToolStripMenuItem, FindCellToolStripMenuItem, FindNextToolStripMenuItem, FindInColumnToolStripMenuItem, ToolStripMenuItem2, ReplaceToolStripMenuItem, ReplaceNextToolStripMenuItem, ReplaceInSameColumnToolStripMenuItem, ToolStripMenuItem3, mnuAddRow, mnuAddClone, mnuCopyAbove, sepEdit1, mnuColumns, mnuAutosize, sepEdit2, mnuNormalize, sepEdit3, mnuRemove})
+            mnuEdit.DropDownItems.AddRange(New ToolStripItem() {CopyToolStripMenuItem, PasteToolStripMenuItem, sepEditDel, mnuDeleteRow, ToolStripMenuItem1, FindToolStripMenuItem, FindCellToolStripMenuItem, FindNextToolStripMenuItem, FindInColumnToolStripMenuItem, ToolStripMenuItem2, ReplaceToolStripMenuItem, ReplaceNextToolStripMenuItem, ReplaceInSameColumnToolStripMenuItem, ToolStripMenuItem3, mnuAddRow, mnuAddClone, mnuCopyDownSafe, mnuCopyAbove, sepEdit1, mnuColumns, mnuAutosize, mnuUnsort, sepEdit2, mnuNormalize, sepEdit3, mnuRemove})
             mnuEdit.Name = "mnuEdit"
             mnuEdit.Size = New Size(39, 20)
             mnuEdit.Text = "&Edit"
@@ -348,12 +366,19 @@ Namespace Forms
             mnuAddClone.Size = New Size(270, 22)
             mnuAddClone.Text = "Add &Cloned Row"
             ' 
+            ' mnuCopyDownSafe
+            ' 
+            mnuCopyDownSafe.Name = "mnuCopyDownSafe"
+            mnuCopyDownSafe.ShortcutKeys = Keys.Control Or Keys.D
+            mnuCopyDownSafe.Size = New Size(270, 22)
+            mnuCopyDownSafe.Text = "Copy Down (&Safe)"
+            ' 
             ' mnuCopyAbove
             ' 
             mnuCopyAbove.Name = "mnuCopyAbove"
-            mnuCopyAbove.ShortcutKeys = Keys.Control Or Keys.D
+            mnuCopyAbove.ShortcutKeys = Keys.Control Or Keys.Shift Or Keys.D
             mnuCopyAbove.Size = New Size(270, 22)
-            mnuCopyAbove.Text = "Copy From Cell A&bove"
+            mnuCopyAbove.Text = "Copy &Down (Force)"
             ' 
             ' sepEdit1
             ' 
@@ -372,6 +397,13 @@ Namespace Forms
             mnuAutosize.ShortcutKeys = Keys.Control Or Keys.Q
             mnuAutosize.Size = New Size(270, 22)
             mnuAutosize.Text = "Auto&size Columns"
+            ' 
+            ' mnuUnsort
+            ' 
+            mnuUnsort.Name = "mnuUnsort"
+            mnuUnsort.ShortcutKeys = Keys.Control Or Keys.U
+            mnuUnsort.Size = New Size(270, 22)
+            mnuUnsort.Text = "&Unsort"
             ' 
             ' sepEdit2
             ' 
@@ -427,7 +459,7 @@ Namespace Forms
             ' 
             ' ToolsToolStripMenuItem
             ' 
-            ToolsToolStripMenuItem.DropDownItems.AddRange(New ToolStripItem() {mnu_tools_ConvertID, QuickWebLookupToolStripMenuItem, ExportRowToolStripMenuItem, ImportRecordsToolStripMenuItem})
+            ToolsToolStripMenuItem.DropDownItems.AddRange(New ToolStripItem() {mnu_tools_ConvertID, QuickWebLookupToolStripMenuItem, ExportRowToolStripMenuItem, ImportRecordsToolStripMenuItem, LocationAnalysisToolStripMenuItem, IntegrityCheckToolStripMenuItem, LocationReportToolStripMenuItem, CollatedBomToolStripMenuItem, FindLocationToolStripMenuItem})
             ToolsToolStripMenuItem.Name = "ToolsToolStripMenuItem"
             ToolsToolStripMenuItem.Size = New Size(47, 20)
             ToolsToolStripMenuItem.Text = "Tools"
@@ -444,20 +476,51 @@ Namespace Forms
             QuickWebLookupToolStripMenuItem.ShortcutKeys = Keys.Control Or Keys.W
             QuickWebLookupToolStripMenuItem.Size = New Size(220, 22)
             QuickWebLookupToolStripMenuItem.Text = "Quick Web Lookup"
-            '
+            ' 
             ' ExportRowToolStripMenuItem
-            '
+            ' 
             ExportRowToolStripMenuItem.Name = "ExportRowToolStripMenuItem"
             ExportRowToolStripMenuItem.ShortcutKeys = Keys.Control Or Keys.E
             ExportRowToolStripMenuItem.Size = New Size(220, 22)
             ExportRowToolStripMenuItem.Text = "Export Row"
-            '
+            ' 
             ' ImportRecordsToolStripMenuItem
-            '
+            ' 
             ImportRecordsToolStripMenuItem.Name = "ImportRecordsToolStripMenuItem"
             ImportRecordsToolStripMenuItem.Size = New Size(220, 22)
             ImportRecordsToolStripMenuItem.Text = "Import Records…"
-            ' 
+            '
+            ' LocationAnalysisToolStripMenuItem
+            '
+            LocationAnalysisToolStripMenuItem.Name = "LocationAnalysisToolStripMenuItem"
+            LocationAnalysisToolStripMenuItem.Size = New Size(220, 22)
+            LocationAnalysisToolStripMenuItem.Text = "Location Analysis"
+            '
+            ' IntegrityCheckToolStripMenuItem
+            '
+            IntegrityCheckToolStripMenuItem.Name = "IntegrityCheckToolStripMenuItem"
+            IntegrityCheckToolStripMenuItem.Size = New Size(220, 22)
+            IntegrityCheckToolStripMenuItem.Text = "Integrity Check"
+            '
+            ' LocationReportToolStripMenuItem
+            '
+            LocationReportToolStripMenuItem.Name = "LocationReportToolStripMenuItem"
+            LocationReportToolStripMenuItem.Size = New Size(220, 22)
+            LocationReportToolStripMenuItem.Text = "Location Report"
+            '
+            ' CollatedBomToolStripMenuItem
+            '
+            CollatedBomToolStripMenuItem.Name = "CollatedBomToolStripMenuItem"
+            CollatedBomToolStripMenuItem.Size = New Size(220, 22)
+            CollatedBomToolStripMenuItem.Text = "Collated BOM"
+            '
+            ' FindLocationToolStripMenuItem
+            '
+            FindLocationToolStripMenuItem.Name = "FindLocationToolStripMenuItem"
+            FindLocationToolStripMenuItem.ShortcutKeys = Keys.Control Or Keys.L
+            FindLocationToolStripMenuItem.Size = New Size(220, 22)
+            FindLocationToolStripMenuItem.Text = "Find Location"
+            '
             ' mnuSettings
             ' 
             mnuSettings.DropDownItems.AddRange(New ToolStripItem() {mnuRules, mnuWebCrawler, mnuApiIntegration, mnuAdvancedClipboard, mnuOptions, sepSettings1, mnuShowConfig, sepSettings2, AdvancedClipboardFunctionsToolStripMenuItem})
@@ -476,9 +539,9 @@ Namespace Forms
             mnuWebCrawler.Name = "mnuWebCrawler"
             mnuWebCrawler.Size = New Size(231, 22)
             mnuWebCrawler.Text = "&WebCrawler…"
-            '
+            ' 
             ' mnuApiIntegration
-            '
+            ' 
             mnuApiIntegration.Name = "mnuApiIntegration"
             mnuApiIntegration.Size = New Size(231, 22)
             mnuApiIntegration.Text = "&API Integration…"
@@ -669,9 +732,12 @@ Namespace Forms
             ' 
             ' statusStrip
             ' 
+            statusStrip.BackColor = Color.FromArgb(CByte(45), CByte(45), CByte(48))
+            statusStrip.ForeColor = Color.FromArgb(CByte(220), CByte(220), CByte(220))
             statusStrip.Items.AddRange(New ToolStripItem() {folderStatus, AdvancedClipboardContent, findStatus, replaceStatus, rowCountStatus, saveStatus})
             statusStrip.Location = New Point(0, 756)
             statusStrip.Name = "statusStrip"
+            statusStrip.RenderMode = ToolStripRenderMode.System
             statusStrip.Size = New Size(1280, 24)
             statusStrip.TabIndex = 3
             ' 
@@ -726,6 +792,7 @@ Namespace Forms
             ' 
             ' split
             ' 
+            split.BackColor = Color.FromArgb(CByte(62), CByte(62), CByte(66))
             split.Dock = DockStyle.Fill
             split.FixedPanel = FixedPanel.Panel1
             split.Location = New Point(0, 24)
@@ -733,11 +800,11 @@ Namespace Forms
             ' 
             ' split.Panel1
             ' 
-            split.Panel1.Controls.Add(grpLibraries)
-            split.Panel1.Padding = New Padding(6)
-            ' 
+            split.Panel1.Controls.Add(fileList)
+            split.Panel1.Controls.Add(lblLibraries)
+            '
             ' split.Panel2
-            ' 
+            '
             split.Panel2.Controls.Add(grid)
             split.Panel2.Controls.Add(emptyPanel)
             split.Panel2.Controls.Add(divider)
@@ -746,22 +813,27 @@ Namespace Forms
             split.SplitterDistance = 220
             split.SplitterWidth = 1
             split.TabIndex = 2
-            ' 
-            ' grpLibraries
-            ' 
-            grpLibraries.Controls.Add(fileList)
-            grpLibraries.Dock = DockStyle.Fill
-            grpLibraries.Location = New Point(6, 6)
-            grpLibraries.Name = "grpLibraries"
-            grpLibraries.Padding = New Padding(6, 3, 6, 6)
-            grpLibraries.Size = New Size(208, 720)
-            grpLibraries.TabIndex = 0
-            grpLibraries.TabStop = False
-            grpLibraries.Text = "Libraries"
-            ' 
+            '
+            ' lblLibraries
+            '
+            lblLibraries.BackColor = Color.FromArgb(CByte(79), CByte(148), CByte(205))
+            lblLibraries.Dock = DockStyle.Top
+            lblLibraries.Font = New Font("Segoe UI", 9.75F, FontStyle.Bold)
+            lblLibraries.ForeColor = Color.White
+            lblLibraries.Name = "lblLibraries"
+            lblLibraries.Padding = New Padding(8, 0, 0, 0)
+            lblLibraries.Size = New Size(220, 24)
+            lblLibraries.TabIndex = 0
+            lblLibraries.Text = "Libraries"
+            lblLibraries.TextAlign = ContentAlignment.MiddleLeft
+            '
             ' fileList
-            ' 
+            '
+            fileList.BackColor = Color.FromArgb(CByte(51), CByte(51), CByte(55))
+            fileList.BorderStyle = BorderStyle.FixedSingle
+            fileList.DrawMode = DrawMode.OwnerDrawFixed
             fileList.Dock = DockStyle.Fill
+            fileList.ForeColor = Color.FromArgb(CByte(220), CByte(220), CByte(220))
             fileList.IntegralHeight = False
             fileList.ItemHeight = 15
             fileList.Location = New Point(6, 19)
@@ -777,6 +849,7 @@ Namespace Forms
             grid.ColumnHeadersHeight = 30
             grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing
             grid.Dock = DockStyle.Fill
+            grid.GridColor = Color.FromArgb(CByte(0), CByte(0), CByte(64))
             grid.Location = New Point(0, 33)
             grid.Name = "grid"
             grid.RowHeadersVisible = False
@@ -839,13 +912,15 @@ Namespace Forms
             gridToolbar.Dock = DockStyle.Top
             gridToolbar.Location = New Point(0, 0)
             gridToolbar.Name = "gridToolbar"
-            gridToolbar.Size = New Size(1059, 32)
+            gridToolbar.Size = New Size(1059, 40)
             gridToolbar.TabIndex = 0
             ' 
             ' backupCluster
             ' 
             backupCluster.AutoSize = True
             backupCluster.AutoSizeMode = AutoSizeMode.GrowAndShrink
+            backupCluster.Controls.Add(btnDeleteRow)
+            backupCluster.Controls.Add(sepBackup)
             backupCluster.Controls.Add(lblBackups)
             backupCluster.Controls.Add(cboBackups)
             backupCluster.Controls.Add(btnRestore)
@@ -869,7 +944,11 @@ Namespace Forms
             ' 
             ' cboBackups
             ' 
+            cboBackups.BackColor = Color.FromArgb(CByte(51), CByte(51), CByte(55))
+            cboBackups.DrawMode = DrawMode.OwnerDrawFixed
             cboBackups.DropDownStyle = ComboBoxStyle.DropDownList
+            cboBackups.FlatStyle = FlatStyle.Flat
+            cboBackups.ForeColor = Color.FromArgb(CByte(220), CByte(220), CByte(220))
             cboBackups.FormattingEnabled = True
             cboBackups.Location = New Point(61, 7)
             cboBackups.Margin = New Padding(0, 4, 0, 0)
@@ -895,11 +974,19 @@ Namespace Forms
             rightCluster.Controls.Add(btnNormalize)
             rightCluster.Controls.Add(btnSave)
             rightCluster.Controls.Add(btnSaveAll)
+            rightCluster.Controls.Add(btnUnsort)
+            rightCluster.Controls.Add(sepTools1)
+            rightCluster.Controls.Add(btnLocationAnalysis)
+            rightCluster.Controls.Add(btnIntegrityCheck)
+            rightCluster.Controls.Add(sepTools2)
+            rightCluster.Controls.Add(btnLocationReport)
+            rightCluster.Controls.Add(sepTools3)
+            rightCluster.Controls.Add(btnCreateArchive)
             rightCluster.Dock = DockStyle.Left
             rightCluster.Location = New Point(0, 0)
             rightCluster.Name = "rightCluster"
             rightCluster.Padding = New Padding(4, 3, 4, 3)
-            rightCluster.Size = New Size(158, 32)
+            rightCluster.Size = New Size(202, 32)
             rightCluster.TabIndex = 2
             rightCluster.WrapContents = False
             ' 
@@ -908,7 +995,7 @@ Namespace Forms
             btnAutosize.Location = New Point(6, 5)
             btnAutosize.Margin = New Padding(2)
             btnAutosize.Name = "btnAutosize"
-            btnAutosize.Size = New Size(30, 24)
+            btnAutosize.Size = New Size(34, 30)
             btnAutosize.TabIndex = 0
             btnAutosize.Text = "↔"
             btnAutosize.UseVisualStyleBackColor = True
@@ -918,7 +1005,7 @@ Namespace Forms
             btnNormalize.Location = New Point(40, 5)
             btnNormalize.Margin = New Padding(2)
             btnNormalize.Name = "btnNormalize"
-            btnNormalize.Size = New Size(30, 24)
+            btnNormalize.Size = New Size(34, 30)
             btnNormalize.TabIndex = 1
             btnNormalize.Text = "✨"
             btnNormalize.UseVisualStyleBackColor = True
@@ -928,7 +1015,7 @@ Namespace Forms
             btnSave.Location = New Point(84, 5)
             btnSave.Margin = New Padding(12, 2, 2, 2)
             btnSave.Name = "btnSave"
-            btnSave.Size = New Size(30, 24)
+            btnSave.Size = New Size(34, 30)
             btnSave.TabIndex = 2
             btnSave.Text = "💾"
             btnSave.UseVisualStyleBackColor = True
@@ -938,21 +1025,106 @@ Namespace Forms
             btnSaveAll.Location = New Point(118, 5)
             btnSaveAll.Margin = New Padding(2)
             btnSaveAll.Name = "btnSaveAll"
-            btnSaveAll.Size = New Size(34, 24)
+            btnSaveAll.Size = New Size(34, 30)
             btnSaveAll.TabIndex = 3
             btnSaveAll.Text = "💾*"
             btnSaveAll.UseVisualStyleBackColor = True
             ' 
+            ' btnUnsort
+            ' 
+            btnUnsort.Location = New Point(166, 5)
+            btnUnsort.Margin = New Padding(12, 2, 2, 2)
+            btnUnsort.Name = "btnUnsort"
+            btnUnsort.Size = New Size(34, 30)
+            btnUnsort.TabIndex = 4
+            btnUnsort.Text = "U"
+            btnUnsort.UseVisualStyleBackColor = True
+            '
+            ' btnDeleteRow
+            '
+            btnDeleteRow.Margin = New Padding(0, 5, 6, 0)
+            btnDeleteRow.Name = "btnDeleteRow"
+            btnDeleteRow.Size = New Size(34, 30)
+            btnDeleteRow.TabIndex = 5
+            btnDeleteRow.Text = "Del"
+            btnDeleteRow.UseVisualStyleBackColor = True
+            '
+            ' sepBackup
+            '
+            sepBackup.BackColor = Color.FromArgb(CByte(90), CByte(90), CByte(95))
+            sepBackup.Margin = New Padding(2, 7, 10, 0)
+            sepBackup.Name = "sepBackup"
+            sepBackup.Size = New Size(2, 24)
+            '
+            ' sepTools1
+            '
+            sepTools1.BackColor = Color.FromArgb(CByte(90), CByte(90), CByte(95))
+            sepTools1.Margin = New Padding(8, 6, 8, 0)
+            sepTools1.Name = "sepTools1"
+            sepTools1.Size = New Size(2, 26)
+            '
+            ' btnLocationAnalysis
+            '
+            btnLocationAnalysis.Margin = New Padding(2)
+            btnLocationAnalysis.Name = "btnLocationAnalysis"
+            btnLocationAnalysis.Size = New Size(34, 30)
+            btnLocationAnalysis.TabIndex = 6
+            btnLocationAnalysis.Text = "LA"
+            btnLocationAnalysis.UseVisualStyleBackColor = True
+            '
+            ' btnIntegrityCheck
+            '
+            btnIntegrityCheck.Margin = New Padding(2)
+            btnIntegrityCheck.Name = "btnIntegrityCheck"
+            btnIntegrityCheck.Size = New Size(34, 30)
+            btnIntegrityCheck.TabIndex = 7
+            btnIntegrityCheck.Text = "IC"
+            btnIntegrityCheck.UseVisualStyleBackColor = True
+            '
+            ' sepTools2
+            '
+            sepTools2.BackColor = Color.FromArgb(CByte(90), CByte(90), CByte(95))
+            sepTools2.Margin = New Padding(8, 6, 8, 0)
+            sepTools2.Name = "sepTools2"
+            sepTools2.Size = New Size(2, 26)
+            '
+            ' btnLocationReport
+            '
+            btnLocationReport.Margin = New Padding(2)
+            btnLocationReport.Name = "btnLocationReport"
+            btnLocationReport.Size = New Size(34, 30)
+            btnLocationReport.TabIndex = 8
+            btnLocationReport.Text = "LR"
+            btnLocationReport.UseVisualStyleBackColor = True
+            '
+            ' sepTools3
+            '
+            sepTools3.BackColor = Color.FromArgb(CByte(90), CByte(90), CByte(95))
+            sepTools3.Margin = New Padding(8, 6, 8, 0)
+            sepTools3.Name = "sepTools3"
+            sepTools3.Size = New Size(2, 26)
+            '
+            ' btnCreateArchive
+            '
+            btnCreateArchive.Margin = New Padding(2)
+            btnCreateArchive.Name = "btnCreateArchive"
+            btnCreateArchive.Size = New Size(34, 30)
+            btnCreateArchive.TabIndex = 9
+            btnCreateArchive.Text = "Ar"
+            btnCreateArchive.UseVisualStyleBackColor = True
+            '
             ' autosaveTimer
             ' 
             autosaveTimer.Interval = 1000
             ' 
             ' MainForm
             ' 
+            BackColor = Color.FromArgb(CByte(45), CByte(45), CByte(48))
             ClientSize = New Size(1280, 780)
             Controls.Add(split)
             Controls.Add(statusStrip)
             Controls.Add(menuStrip)
+            ForeColor = Color.FromArgb(CByte(220), CByte(220), CByte(220))
             KeyPreview = True
             MainMenuStrip = menuStrip
             MinimumSize = New Size(860, 560)
@@ -967,7 +1139,6 @@ Namespace Forms
             split.Panel2.ResumeLayout(False)
             CType(split, ComponentModel.ISupportInitialize).EndInit()
             split.ResumeLayout(False)
-            grpLibraries.ResumeLayout(False)
             CType(grid, ComponentModel.ISupportInitialize).EndInit()
             emptyPanel.ResumeLayout(False)
             emptyPanel.PerformLayout()
@@ -998,10 +1169,12 @@ Namespace Forms
         Friend WithEvents mnuEdit As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuAddRow As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuAddClone As System.Windows.Forms.ToolStripMenuItem
+        Friend WithEvents mnuCopyDownSafe As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuCopyAbove As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents sepEdit1 As System.Windows.Forms.ToolStripSeparator
         Friend WithEvents mnuColumns As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents mnuAutosize As System.Windows.Forms.ToolStripMenuItem
+        Friend WithEvents mnuUnsort As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents sepEdit2 As System.Windows.Forms.ToolStripSeparator
         Friend WithEvents mnuNormalize As System.Windows.Forms.ToolStripMenuItem
         Friend WithEvents sepEdit3 As System.Windows.Forms.ToolStripSeparator
@@ -1027,7 +1200,7 @@ Namespace Forms
         Friend WithEvents rowCountStatus As System.Windows.Forms.ToolStripStatusLabel
         Friend WithEvents saveStatus As System.Windows.Forms.ToolStripStatusLabel
         Friend WithEvents split As System.Windows.Forms.SplitContainer
-        Friend WithEvents grpLibraries As System.Windows.Forms.GroupBox
+        Friend WithEvents lblLibraries As System.Windows.Forms.Label
         Friend WithEvents fileList As System.Windows.Forms.ListBox
         Friend WithEvents gridToolbar As System.Windows.Forms.Panel
         Friend WithEvents rightCluster As System.Windows.Forms.FlowLayoutPanel
@@ -1035,6 +1208,16 @@ Namespace Forms
         Friend WithEvents btnNormalize As System.Windows.Forms.Button
         Friend WithEvents btnSave As System.Windows.Forms.Button
         Friend WithEvents btnSaveAll As System.Windows.Forms.Button
+        Friend WithEvents btnUnsort As System.Windows.Forms.Button
+        Friend WithEvents btnDeleteRow As System.Windows.Forms.Button
+        Friend WithEvents sepTools1 As System.Windows.Forms.Panel
+        Friend WithEvents btnLocationAnalysis As System.Windows.Forms.Button
+        Friend WithEvents btnIntegrityCheck As System.Windows.Forms.Button
+        Friend WithEvents sepTools2 As System.Windows.Forms.Panel
+        Friend WithEvents btnLocationReport As System.Windows.Forms.Button
+        Friend WithEvents sepTools3 As System.Windows.Forms.Panel
+        Friend WithEvents btnCreateArchive As System.Windows.Forms.Button
+        Friend WithEvents sepBackup As System.Windows.Forms.Panel
         Friend WithEvents backupCluster As System.Windows.Forms.FlowLayoutPanel
         Friend WithEvents lblBackups As System.Windows.Forms.Label
         Friend WithEvents cboBackups As System.Windows.Forms.ComboBox
@@ -1066,6 +1249,11 @@ Namespace Forms
         Friend WithEvents QuickWebLookupToolStripMenuItem As ToolStripMenuItem
         Friend WithEvents ExportRowToolStripMenuItem As ToolStripMenuItem
         Friend WithEvents ImportRecordsToolStripMenuItem As ToolStripMenuItem
+        Friend WithEvents LocationAnalysisToolStripMenuItem As ToolStripMenuItem
+        Friend WithEvents IntegrityCheckToolStripMenuItem As ToolStripMenuItem
+        Friend WithEvents LocationReportToolStripMenuItem As ToolStripMenuItem
+        Friend WithEvents CollatedBomToolStripMenuItem As ToolStripMenuItem
+        Friend WithEvents FindLocationToolStripMenuItem As ToolStripMenuItem
         Friend WithEvents AdvancedClipboardFunctionsToolStripMenuItem As ToolStripMenuItem
         Friend WithEvents CopyToolStripMenuItem1 As ToolStripMenuItem
         Friend WithEvents Copy0ToolStripMenuItem As ToolStripMenuItem
